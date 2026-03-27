@@ -43,23 +43,39 @@ export async function GET(request: NextRequest) {
 
   try {
     // Exchange code for tokens
-    const tokenResponse = await stravaService.exchangeCodeForTokens(code);
+    let tokenResponse;
+    try {
+      tokenResponse = await stravaService.exchangeCodeForTokens(code);
+    } catch (tokenErr) {
+      console.error('Token exchange failed:', tokenErr);
+      return NextResponse.redirect(
+        `${appUrl}/?error=${encodeURIComponent('Token exchange failed')}`
+      );
+    }
 
     // Create or update user in database
-    const user = await prisma.user.upsert({
-      where: { stravaAthleteId: tokenResponse.athlete.id },
-      create: {
-        stravaAthleteId: tokenResponse.athlete.id,
-        stravaAccessToken: tokenResponse.access_token,
-        stravaRefreshToken: tokenResponse.refresh_token,
-        stravaTokenExpiresAt: new Date(tokenResponse.expires_at * 1000),
-      },
-      update: {
-        stravaAccessToken: tokenResponse.access_token,
-        stravaRefreshToken: tokenResponse.refresh_token,
-        stravaTokenExpiresAt: new Date(tokenResponse.expires_at * 1000),
-      },
-    });
+    let user;
+    try {
+      user = await prisma.user.upsert({
+        where: { stravaAthleteId: tokenResponse.athlete.id },
+        create: {
+          stravaAthleteId: tokenResponse.athlete.id,
+          stravaAccessToken: tokenResponse.access_token,
+          stravaRefreshToken: tokenResponse.refresh_token,
+          stravaTokenExpiresAt: new Date(tokenResponse.expires_at * 1000),
+        },
+        update: {
+          stravaAccessToken: tokenResponse.access_token,
+          stravaRefreshToken: tokenResponse.refresh_token,
+          stravaTokenExpiresAt: new Date(tokenResponse.expires_at * 1000),
+        },
+      });
+    } catch (dbErr) {
+      console.error('Database upsert failed:', dbErr);
+      return NextResponse.redirect(
+        `${appUrl}/?error=${encodeURIComponent('Database error')}`
+      );
+    }
 
     // Create sealed session data manually
     const sessionData = {
@@ -68,9 +84,17 @@ export async function GET(request: NextRequest) {
       isLoggedIn: true,
     };
 
-    const sealedSession = await sealData(sessionData, {
-      password: sessionOptions.password,
-    });
+    let sealedSession;
+    try {
+      sealedSession = await sealData(sessionData, {
+        password: sessionOptions.password,
+      });
+    } catch (sealErr) {
+      console.error('Session seal failed:', sealErr);
+      return NextResponse.redirect(
+        `${appUrl}/?error=${encodeURIComponent('Session creation failed')}`
+      );
+    }
 
     // Create redirect response with cookie set directly
     const response = NextResponse.redirect(`${appUrl}/dashboard`);
