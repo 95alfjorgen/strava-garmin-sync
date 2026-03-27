@@ -1,9 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { garminService } from '@/lib/services/garmin.service';
-import { getSessionData } from '@/lib/session';
+import { unsealData } from 'iron-session';
 
 export const dynamic = 'force-dynamic';
+
+const SESSION_PASSWORD = process.env.SESSION_SECRET || 'complex_password_at_least_32_characters_long';
+
+interface SessionData {
+  userId?: string;
+  stravaAthleteId?: number;
+  isLoggedIn: boolean;
+}
+
+async function getSessionFromRequest(request: NextRequest): Promise<SessionData> {
+  const sessionCookie = request.cookies.get('strava-garmin-sync-session');
+
+  if (!sessionCookie?.value) {
+    return { isLoggedIn: false };
+  }
+
+  try {
+    const data = await unsealData<SessionData>(sessionCookie.value, {
+      password: SESSION_PASSWORD,
+    });
+    return {
+      ...data,
+      isLoggedIn: data.isLoggedIn ?? false,
+    };
+  } catch (err) {
+    console.error('Failed to unseal session:', err);
+    return { isLoggedIn: false };
+  }
+}
 
 const connectSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -12,8 +41,12 @@ const connectSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    // Verify user is authenticated
-    const session = await getSessionData();
+    // Debug: log cookies
+    const sessionCookie = request.cookies.get('strava-garmin-sync-session');
+    console.log('Session cookie present:', !!sessionCookie?.value);
+
+    // Verify user is authenticated - read directly from request
+    const session = await getSessionFromRequest(request);
     console.log('Session data:', { isLoggedIn: session.isLoggedIn, userId: session.userId });
 
     if (!session.isLoggedIn || !session.userId) {
@@ -76,10 +109,10 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request: NextRequest) {
   try {
     // Verify user is authenticated
-    const session = await getSessionData();
+    const session = await getSessionFromRequest(request);
     if (!session.isLoggedIn || !session.userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
