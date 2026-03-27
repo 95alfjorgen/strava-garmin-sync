@@ -6,21 +6,40 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "worker": "tsx src/workers/sync-worker.ts",
+    "worker:dev": "tsx watch src/workers/sync-worker.ts",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@garmin/fitsdk": "^21.195.0",
+    "@prisma/client": "^5.22.0",
+    "axios": "^1.13.6",
+    "bullmq": "^5.71.1",
+    "garmin-connect": "^1.6.2",
+    "ioredis": "^5.10.1",
+    "iron-session": "^8.0.4",
+    "next": "14.2.35",
+    "prisma": "^5.22.0",
     "react": "^18",
     "react-dom": "^18",
-    "next": "14.2.35"
+    "strava-v3": "^4.0.1",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
-    "typescript": "^5",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "dotenv": "^17.3.1",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.35",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
-    "eslint": "^8",
-    "eslint-config-next": "14.2.35"
+    "tsx": "^4.21.0",
+    "typescript": "^5"
   }
 }

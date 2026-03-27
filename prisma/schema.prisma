@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SyncStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model User {
+  id                   String   @id @default(cuid())
+  stravaAthleteId      Int      @unique
+
+  // Strava OAuth tokens
+  stravaAccessToken    String
+  stravaRefreshToken   String
+  stravaTokenExpiresAt DateTime
+
+  // Garmin credentials (encrypted)
+  garminEmail          String?
+  garminPasswordEnc    String?  // AES-256-GCM encrypted
+  garminSessionData    String?  // Persisted session to minimize re-auth
+  garminConnected      Boolean  @default(false)
+
+  // Timestamps
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  // Relations
+  syncRecords          SyncRecord[]
+}
+
+model SyncRecord {
+  id               String     @id @default(cuid())
+  userId           String
+  stravaActivityId BigInt     @unique
+  garminActivityId String?
+  status           SyncStatus @default(PENDING)
+  activityType     String?
+  activityName     String?
+  syncedAt         DateTime?
+  errorMessage     String?
+  retryCount       Int        @default(0)
+
+  // Timestamps
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  // Relations
+  user             User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}
+
+model WebhookSubscription {
+  id             String   @id @default(cuid())
+  subscriptionId Int      @unique
+  verifyToken    String
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
