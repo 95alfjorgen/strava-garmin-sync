@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { garminService } from '@/lib/services/garmin.service';
 import { unsealData } from 'iron-session';
+import { prisma } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,31 +38,38 @@ async function getSessionFromRequest(request: NextRequest): Promise<SessionData>
 const connectSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(1, 'Password is required'),
+  authToken: z.string().optional(), // Token-based auth fallback
 });
 
 export async function POST(request: NextRequest) {
   try {
-    // Debug: log cookies
-    const sessionCookie = request.cookies.get('strava-garmin-sync-session');
-    const allCookies = request.cookies.getAll().map(c => c.name);
-    console.log('All cookies:', allCookies);
-    console.log('Session cookie present:', !!sessionCookie?.value);
+    // Try cookie-based auth first
+    let session = await getSessionFromRequest(request);
+    let userId = session.userId;
 
-    // Verify user is authenticated - read directly from request
-    const session = await getSessionFromRequest(request);
-    console.log('Session data:', { isLoggedIn: session.isLoggedIn, userId: session.userId });
-
+    // If cookie auth fails, try token-based auth from request body
     if (!session.isLoggedIn || !session.userId) {
-      console.log('Session check failed - returning 401');
-      return NextResponse.json(
-        {
-          error: 'Unauthorized - session invalid',
-          debug: {
-            cookiePresent: !!sessionCookie?.value,
-            cookieNames: allCookies,
-            sessionData: session
+      console.log('Cookie auth failed, trying token auth...');
+
+      const body = await request.clone().json();
+      if (body.authToken) {
+        try {
+          const tokenData = await unsealData<SessionData>(body.authToken, {
+            password: SESSION_PASSWORD,
+          });
+          if (tokenData.isLoggedIn && tokenData.userId) {
+            userId = tokenData.userId;
+            console.log('Token auth successful for user:', userId);
           }
-        },
+        } catch (err) {
+          console.error('Token auth failed:', err);
+        }
+      }
+    }
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Unauthorized - no valid auth' },
         { status: 401 }
       );
     }

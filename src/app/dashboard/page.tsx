@@ -84,10 +84,18 @@ export default function Dashboard() {
     setGarminError(null);
 
     try {
+      // First, get an auth token via GET (which works with cookies)
+      const tokenRes = await fetch('/api/auth/token', { credentials: 'include' });
+      if (!tokenRes.ok) {
+        throw new Error('Failed to get auth token');
+      }
+      const { token: authToken } = await tokenRes.json();
+
+      // Now make the POST request with the token
       const res = await fetch('/api/auth/garmin/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(garminForm),
+        body: JSON.stringify({ ...garminForm, authToken }),
         credentials: 'include',
       });
 
