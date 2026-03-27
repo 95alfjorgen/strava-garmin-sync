@@ -46,9 +46,9 @@ export default function Dashboard() {
   async function fetchData() {
     try {
       const [userRes, statsRes, historyRes] = await Promise.all([
-        fetch('/api/user'),
-        fetch('/api/sync/stats'),
-        fetch('/api/sync/history?limit=10'),
+        fetch('/api/user', { credentials: 'include' }),
+        fetch('/api/sync/stats', { credentials: 'include' }),
+        fetch('/api/sync/history?limit=10', { credentials: 'include' }),
       ]);
 
       if (!userRes.ok) {
@@ -88,6 +88,7 @@ export default function Dashboard() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(garminForm),
+        credentials: 'include',
       });
 
       const data = await res.json();
@@ -111,7 +112,7 @@ export default function Dashboard() {
     }
 
     try {
-      await fetch('/api/auth/garmin/connect', { method: 'DELETE' });
+      await fetch('/api/auth/garmin/connect', { method: 'DELETE', credentials: 'include' });
       fetchData();
     } catch (err) {
       console.error('Failed to disconnect Garmin:', err);
