@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { garminService } from '@/lib/services/garmin.service';
-import { getSession } from '@/lib/session';
+import { getSessionData } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +13,7 @@ const connectSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     // Verify user is authenticated
-    const session = await getSession();
+    const session = await getSessionData();
     if (!session.isLoggedIn || !session.userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
 export async function DELETE() {
   try {
     // Verify user is authenticated
-    const session = await getSession();
+    const session = await getSessionData();
     if (!session.isLoggedIn || !session.userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },

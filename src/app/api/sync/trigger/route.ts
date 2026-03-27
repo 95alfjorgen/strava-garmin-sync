@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getSession } from '@/lib/session';
+import { getSessionData } from '@/lib/session';
 import { syncService } from '@/lib/services/sync.service';
 import { prisma } from '@/lib/db';
 
@@ -12,7 +12,7 @@ const triggerSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getSession();
+    const session = await getSessionData();
     if (!session.isLoggedIn || !session.userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

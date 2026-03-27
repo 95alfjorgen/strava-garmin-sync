@@ -1,4 +1,4 @@
-import { getIronSession, IronSession } from 'iron-session';
+import { getIronSession, IronSession, sealData, unsealData } from 'iron-session';
 import { cookies } from 'next/headers';
 
 export interface SessionData {
@@ -29,3 +29,27 @@ export async function getSession(): Promise<IronSession<SessionData>> {
 
   return session;
 }
+
+// Helper to read session data without the full IronSession wrapper
+export async function getSessionData(): Promise<SessionData> {
+  const cookieStore = await cookies();
+  const sessionCookie = cookieStore.get(sessionOptions.cookieName);
+
+  if (!sessionCookie?.value) {
+    return { isLoggedIn: false };
+  }
+
+  try {
+    const data = await unsealData<SessionData>(sessionCookie.value, {
+      password: sessionOptions.password,
+    });
+    return {
+      ...data,
+      isLoggedIn: data.isLoggedIn ?? false,
+    };
+  } catch {
+    return { isLoggedIn: false };
+  }
+}
+
+export { sealData, unsealData };

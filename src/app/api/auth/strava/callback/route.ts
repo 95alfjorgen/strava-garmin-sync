@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stravaService } from '@/lib/services/strava.service';
 import { prisma } from '@/lib/db';
-import { getSession } from '@/lib/session';
+import { sealData } from 'iron-session';
 
 export const dynamic = 'force-dynamic';
+
+const sessionOptions = {
+  password: process.env.SESSION_SECRET || 'complex_password_at_least_32_characters_long',
+  cookieName: 'strava-garmin-sync-session',
+};
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -17,14 +22,14 @@ export async function GET(request: NextRequest) {
   if (error) {
     console.error('Strava OAuth error:', error);
     return NextResponse.redirect(
-      `${appUrl}/dashboard?error=${encodeURIComponent('Authentication was denied')}`
+      `${appUrl}/?error=${encodeURIComponent('Authentication was denied')}`
     );
   }
 
   // Validate code is present
   if (!code) {
     return NextResponse.redirect(
-      `${appUrl}/dashboard?error=${encodeURIComponent('No authorization code received')}`
+      `${appUrl}/?error=${encodeURIComponent('No authorization code received')}`
     );
   }
 
@@ -32,7 +37,7 @@ export async function GET(request: NextRequest) {
   const storedState = request.cookies.get('strava_oauth_state')?.value;
   if (!storedState || storedState !== state) {
     return NextResponse.redirect(
-      `${appUrl}/dashboard?error=${encodeURIComponent('Invalid state parameter')}`
+      `${appUrl}/?error=${encodeURIComponent('Invalid state parameter')}`
     );
   }
 
@@ -56,37 +61,37 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Set up session
-    const session = await getSession();
-    session.userId = user.id;
-    session.stravaAthleteId = tokenResponse.athlete.id;
-    session.isLoggedIn = true;
-    await session.save();
+    // Create sealed session data manually
+    const sessionData = {
+      userId: user.id,
+      stravaAthleteId: tokenResponse.athlete.id,
+      isLoggedIn: true,
+    };
 
-    // Create redirect response
+    const sealedSession = await sealData(sessionData, {
+      password: sessionOptions.password,
+    });
+
+    // Create redirect response with cookie set directly
     const response = NextResponse.redirect(`${appUrl}/dashboard`);
 
     // Clear the OAuth state cookie
     response.cookies.delete('strava_oauth_state');
 
-    // Copy the session cookie to the redirect response
-    const cookieStore = await import('next/headers').then(m => m.cookies());
-    const sessionCookie = cookieStore.get('strava-garmin-sync-session');
-    if (sessionCookie) {
-      response.cookies.set('strava-garmin-sync-session', sessionCookie.value, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 30, // 30 days
-        path: '/',
-      });
-    }
+    // Set the session cookie directly on the response
+    response.cookies.set(sessionOptions.cookieName, sealedSession, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 30, // 30 days
+      path: '/',
+    });
 
     return response;
   } catch (err) {
     console.error('Error during Strava OAuth callback:', err);
     return NextResponse.redirect(
-      `${appUrl}/dashboard?error=${encodeURIComponent('Failed to complete authentication')}`
+      `${appUrl}/?error=${encodeURIComponent('Failed to complete authentication')}`
     );
   }
 }

@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/session';
+import { getSessionData } from '@/lib/session';
 import { syncService } from '@/lib/services/sync.service';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const session = await getSession();
+    const session = await getSessionData();
     if (!session.isLoggedIn || !session.userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
