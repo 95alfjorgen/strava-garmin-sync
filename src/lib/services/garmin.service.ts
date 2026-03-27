@@ -1,4 +1,4 @@
-import GarminConnect from 'garmin-connect';
+import { GarminConnect } from 'garmin-connect';
 import { prisma } from '@/lib/db';
 import { encrypt, decrypt } from '@/lib/encryption';
 
