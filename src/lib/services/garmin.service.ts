@@ -101,7 +101,7 @@ export class GarminService {
   /**
    * Get an authenticated Garmin client for a user
    */
-  async getClient(userId: string): Promise<GarminConnect> {
+  async getClient(userId: string): Promise<GarminConnectInstance> {
     // Check cache first
     const cached = this.clientCache.get(userId);
     if (cached) {
