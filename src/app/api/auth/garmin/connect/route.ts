@@ -14,18 +14,33 @@ export async function POST(request: NextRequest) {
   try {
     // Verify user is authenticated
     const session = await getSessionData();
+    console.log('Session data:', { isLoggedIn: session.isLoggedIn, userId: session.userId });
+
     if (!session.isLoggedIn || !session.userId) {
+      console.log('Session check failed - returning 401');
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'Unauthorized - session invalid' },
         { status: 401 }
       );
     }
 
     // Parse and validate request body
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+      console.log('Request body parsed, email:', body.email);
+    } catch (parseErr) {
+      console.error('Failed to parse request body:', parseErr);
+      return NextResponse.json(
+        { error: 'Invalid request body' },
+        { status: 400 }
+      );
+    }
+
     const validation = connectSchema.safeParse(body);
 
     if (!validation.success) {
+      console.log('Validation failed:', validation.error.issues);
       return NextResponse.json(
         { error: validation.error.issues[0].message },
         { status: 400 }
@@ -35,11 +50,14 @@ export async function POST(request: NextRequest) {
     const { email, password } = validation.data;
 
     // Attempt to connect Garmin account
+    console.log('Attempting Garmin connection for user:', session.userId);
     const result = await garminService.connectAccount(
       session.userId,
       email,
       password
     );
+
+    console.log('Garmin connection result:', { success: result.success, error: result.error });
 
     if (!result.success) {
       return NextResponse.json(
@@ -52,7 +70,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error connecting Garmin account:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: `Internal server error: ${error instanceof Error ? error.message : 'unknown'}` },
       { status: 500 }
     );
   }
