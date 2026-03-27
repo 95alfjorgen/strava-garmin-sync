@@ -1,18 +1,42 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getSessionData } from '@/lib/session';
-import { sealData } from 'iron-session';
+import { sealData, unsealData } from 'iron-session';
 
 export const dynamic = 'force-dynamic';
 
 const SESSION_PASSWORD = process.env.SESSION_SECRET || 'complex_password_at_least_32_characters_long';
 
+interface SessionData {
+  userId?: string;
+  stravaAthleteId?: number;
+  isLoggedIn: boolean;
+}
+
 // GET request to obtain an auth token (cookies work with GET)
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const session = await getSessionData();
+    // Try reading session from cookies directly
+    const sessionCookie = request.cookies.get('strava-garmin-sync-session');
+    console.log('Token endpoint - cookie present:', !!sessionCookie?.value);
+
+    let session: SessionData = { isLoggedIn: false };
+
+    if (sessionCookie?.value) {
+      try {
+        session = await unsealData<SessionData>(sessionCookie.value, {
+          password: SESSION_PASSWORD,
+        });
+        console.log('Token endpoint - session unsealed:', { isLoggedIn: session.isLoggedIn, userId: session.userId });
+      } catch (err) {
+        console.error('Token endpoint - unseal failed:', err);
+      }
+    }
 
     if (!session.isLoggedIn || !session.userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({
+        error: 'Unauthorized',
+        debug: { cookiePresent: !!sessionCookie?.value }
+      }, { status: 401 });
     }
 
     // Create a short-lived token with the session data
