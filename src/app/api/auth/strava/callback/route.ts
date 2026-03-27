@@ -63,9 +63,24 @@ export async function GET(request: NextRequest) {
     session.isLoggedIn = true;
     await session.save();
 
-    // Clear the OAuth state cookie and redirect to dashboard
+    // Create redirect response
     const response = NextResponse.redirect(`${appUrl}/dashboard`);
+
+    // Clear the OAuth state cookie
     response.cookies.delete('strava_oauth_state');
+
+    // Copy the session cookie to the redirect response
+    const cookieStore = await import('next/headers').then(m => m.cookies());
+    const sessionCookie = cookieStore.get('strava-garmin-sync-session');
+    if (sessionCookie) {
+      response.cookies.set('strava-garmin-sync-session', sessionCookie.value, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 30, // 30 days
+        path: '/',
+      });
+    }
 
     return response;
   } catch (err) {
