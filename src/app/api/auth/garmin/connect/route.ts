@@ -43,6 +43,8 @@ export async function POST(request: NextRequest) {
   try {
     // Debug: log cookies
     const sessionCookie = request.cookies.get('strava-garmin-sync-session');
+    const allCookies = request.cookies.getAll().map(c => c.name);
+    console.log('All cookies:', allCookies);
     console.log('Session cookie present:', !!sessionCookie?.value);
 
     // Verify user is authenticated - read directly from request
@@ -52,7 +54,14 @@ export async function POST(request: NextRequest) {
     if (!session.isLoggedIn || !session.userId) {
       console.log('Session check failed - returning 401');
       return NextResponse.json(
-        { error: 'Unauthorized - session invalid' },
+        {
+          error: 'Unauthorized - session invalid',
+          debug: {
+            cookiePresent: !!sessionCookie?.value,
+            cookieNames: allCookies,
+            sessionData: session
+          }
+        },
         { status: 401 }
       );
     }
