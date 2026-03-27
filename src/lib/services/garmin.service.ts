@@ -1,9 +1,23 @@
-import GarminConnect from 'garmin-connect';
 import { prisma } from '@/lib/db';
 import { encrypt, decrypt } from '@/lib/encryption';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type GarminConnectInstance = any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type GarminConnectClass = any;
+
+// Dynamic import to handle module resolution correctly
+let GarminConnect: GarminConnectClass | null = null;
+
+async function getGarminConnectClass(): Promise<GarminConnectClass> {
+  if (!GarminConnect) {
+    // Use require for CommonJS compatibility
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const gc = require('garmin-connect');
+    GarminConnect = gc.GarminConnect || gc.default || gc;
+  }
+  return GarminConnect;
+}
 
 export class GarminService {
   private static instance: GarminService;
@@ -25,7 +39,8 @@ export class GarminService {
     password: string
   ): Promise<{ success: boolean; error?: string }> {
     // First, try to authenticate to validate credentials
-    const client = new GarminConnect();
+    const GC = await getGarminConnectClass();
+    const client = new GC();
 
     try {
       await client.login(email, password);
@@ -121,7 +136,8 @@ export class GarminService {
       throw new Error('Garmin account not connected');
     }
 
-    const client = new GarminConnect();
+    const GC = await getGarminConnectClass();
+    const client = new GC();
 
     // Try to restore session first
     if (user.garminSessionData) {
