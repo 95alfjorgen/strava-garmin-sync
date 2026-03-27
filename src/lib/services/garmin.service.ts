@@ -40,10 +40,13 @@ export class GarminService {
   ): Promise<{ success: boolean; error?: string }> {
     // First, try to authenticate to validate credentials
     const GC = await getGarminConnectClass();
-    const client = new GC();
+    const client = new GC({
+      username: email,
+      password: password,
+    });
 
     try {
-      await client.login(email, password);
+      await client.login();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Authentication failed';
@@ -137,7 +140,13 @@ export class GarminService {
     }
 
     const GC = await getGarminConnectClass();
-    const client = new GC();
+    const password = decrypt(user.garminPasswordEnc);
+
+    // Create client with credentials
+    const client = new GC({
+      username: user.garminEmail,
+      password: password,
+    });
 
     // Try to restore session first
     if (user.garminSessionData) {
@@ -158,8 +167,7 @@ export class GarminService {
     }
 
     // Authenticate with credentials
-    const password = decrypt(user.garminPasswordEnc);
-    await client.login(user.garminEmail, password);
+    await client.login();
 
     // Try to save new session
     try {
