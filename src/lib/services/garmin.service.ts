@@ -1,10 +1,15 @@
-import { GarminConnect } from 'garmin-connect';
+import GarminConnectDefault from 'garmin-connect';
 import { prisma } from '@/lib/db';
 import { encrypt, decrypt } from '@/lib/encryption';
 
+// Handle both named and default export patterns
+const GarminConnect = (GarminConnectDefault as unknown as { GarminConnect: typeof GarminConnectDefault }).GarminConnect || GarminConnectDefault;
+
+type GarminConnectInstance = InstanceType<typeof GarminConnect>;
+
 export class GarminService {
   private static instance: GarminService;
-  private clientCache: Map<string, GarminConnect> = new Map();
+  private clientCache: Map<string, GarminConnectInstance> = new Map();
 
   static getInstance(): GarminService {
     if (!GarminService.instance) {
