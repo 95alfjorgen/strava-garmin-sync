@@ -99,9 +99,9 @@ export async function POST(request: NextRequest) {
     const { email, password } = validation.data;
 
     // Attempt to connect Garmin account
-    console.log('Attempting Garmin connection for user:', session.userId);
+    console.log('Attempting Garmin connection for user:', userId);
     const result = await garminService.connectAccount(
-      session.userId,
+      userId,
       email,
       password
     );
