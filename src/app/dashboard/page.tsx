@@ -94,7 +94,8 @@ export default function Dashboard() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to connect Garmin');
+        console.log('Garmin connect error:', data);
+        throw new Error(data.debug ? JSON.stringify(data) : (data.error || 'Failed to connect Garmin'));
       }
 
       setGarminForm({ email: '', password: '' });
