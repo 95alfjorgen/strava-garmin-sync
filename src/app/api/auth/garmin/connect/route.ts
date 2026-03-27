@@ -13,23 +13,19 @@ interface SessionData {
   isLoggedIn: boolean;
 }
 
-async function getSessionFromRequest(request: NextRequest): Promise<SessionData> {
-  const sessionCookie = request.cookies.get('strava-garmin-sync-session');
-
-  if (!sessionCookie?.value) {
+async function getSessionFromHeader(request: NextRequest): Promise<SessionData> {
+  const authHeader = request.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
     return { isLoggedIn: false };
   }
 
+  const token = authHeader.substring(7);
   try {
-    const data = await unsealData<SessionData>(sessionCookie.value, {
+    const data = await unsealData<SessionData>(token, {
       password: SESSION_PASSWORD,
     });
-    return {
-      ...data,
-      isLoggedIn: data.isLoggedIn ?? false,
-    };
-  } catch (err) {
-    console.error('Failed to unseal session:', err);
+    return { ...data, isLoggedIn: data.isLoggedIn ?? false };
+  } catch {
     return { isLoggedIn: false };
   }
 }
@@ -37,41 +33,19 @@ async function getSessionFromRequest(request: NextRequest): Promise<SessionData>
 const connectSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(1, 'Password is required'),
-  authToken: z.string().optional(), // Token-based auth fallback
 });
 
 export async function POST(request: NextRequest) {
   try {
-    // Try cookie-based auth first
-    const session = await getSessionFromRequest(request);
-    let userId = session.userId;
-
-    // If cookie auth fails, try token-based auth from request body
+    const session = await getSessionFromHeader(request);
     if (!session.isLoggedIn || !session.userId) {
-      console.log('Cookie auth failed, trying token auth...');
-
-      const body = await request.clone().json();
-      if (body.authToken) {
-        try {
-          const tokenData = await unsealData<SessionData>(body.authToken, {
-            password: SESSION_PASSWORD,
-          });
-          if (tokenData.isLoggedIn && tokenData.userId) {
-            userId = tokenData.userId;
-            console.log('Token auth successful for user:', userId);
-          }
-        } catch (err) {
-          console.error('Token auth failed:', err);
-        }
-      }
-    }
-
-    if (!userId) {
       return NextResponse.json(
-        { error: 'Unauthorized - no valid auth' },
+        { error: 'Unauthorized' },
         { status: 401 }
       );
     }
+
+    const userId = session.userId;
 
     // Parse and validate request body
     let body;
@@ -127,8 +101,7 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    // Verify user is authenticated
-    const session = await getSessionFromRequest(request);
+    const session = await getSessionFromHeader(request);
     if (!session.isLoggedIn || !session.userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },

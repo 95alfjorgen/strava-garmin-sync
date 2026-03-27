@@ -29,6 +29,24 @@ interface SyncRecord {
   createdAt: string;
 }
 
+// Helper to get auth token from localStorage
+function getAuthToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('authToken');
+}
+
+// Helper to make authenticated fetch requests
+async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const token = getAuthToken();
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...options.headers,
+      'Authorization': token ? `Bearer ${token}` : '',
+    },
+  });
+}
+
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [stats, setStats] = useState<SyncStats | null>(null);
@@ -40,19 +58,36 @@ export default function Dashboard() {
   const [garminError, setGarminError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Check for token in URL hash (from OAuth callback)
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash;
+      if (hash.startsWith('#token=')) {
+        const token = decodeURIComponent(hash.substring(7));
+        localStorage.setItem('authToken', token);
+        // Clear the hash from URL
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+    }
     fetchData();
   }, []);
 
   async function fetchData() {
     try {
+      // Check if we have a token
+      if (!getAuthToken()) {
+        window.location.href = '/';
+        return;
+      }
+
       const [userRes, statsRes, historyRes] = await Promise.all([
-        fetch('/api/user', { credentials: 'include' }),
-        fetch('/api/sync/stats', { credentials: 'include' }),
-        fetch('/api/sync/history?limit=10', { credentials: 'include' }),
+        authFetch('/api/user'),
+        authFetch('/api/sync/stats'),
+        authFetch('/api/sync/history?limit=10'),
       ]);
 
       if (!userRes.ok) {
         if (userRes.status === 401) {
+          localStorage.removeItem('authToken');
           window.location.href = '/';
           return;
         }
@@ -84,28 +119,17 @@ export default function Dashboard() {
     setGarminError(null);
 
     try {
-      // First, get an auth token via GET (which works with cookies)
-      const tokenRes = await fetch('/api/auth/token', { credentials: 'include' });
-      const tokenData = await tokenRes.json();
-      if (!tokenRes.ok) {
-        console.log('Token fetch failed:', tokenData);
-        throw new Error(`Failed to get auth token: ${JSON.stringify(tokenData)}`);
-      }
-      const { token: authToken } = tokenData;
-
-      // Now make the POST request with the token
-      const res = await fetch('/api/auth/garmin/connect', {
+      const res = await authFetch('/api/auth/garmin/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...garminForm, authToken }),
-        credentials: 'include',
+        body: JSON.stringify(garminForm),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
         console.log('Garmin connect error:', data);
-        throw new Error(data.debug ? JSON.stringify(data) : (data.error || 'Failed to connect Garmin'));
+        throw new Error(data.error || 'Failed to connect Garmin');
       }
 
       setGarminForm({ email: '', password: '' });
@@ -123,7 +147,7 @@ export default function Dashboard() {
     }
 
     try {
-      await fetch('/api/auth/garmin/connect', { method: 'DELETE', credentials: 'include' });
+      await authFetch('/api/auth/garmin/connect', { method: 'DELETE' });
       fetchData();
     } catch (err) {
       console.error('Failed to disconnect Garmin:', err);

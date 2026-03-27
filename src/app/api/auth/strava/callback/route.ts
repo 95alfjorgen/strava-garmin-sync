@@ -96,20 +96,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Create redirect response with cookie set directly
-    const response = NextResponse.redirect(`${appUrl}/dashboard`);
+    // Redirect to dashboard with token in URL fragment (for localStorage storage)
+    // Using fragment (#) so token isn't sent to server in subsequent requests
+    const response = NextResponse.redirect(`${appUrl}/dashboard#token=${encodeURIComponent(sealedSession)}`);
 
     // Clear the OAuth state cookie
     response.cookies.delete('strava_oauth_state');
-
-    // Set the session cookie directly on the response
-    response.cookies.set(sessionOptions.cookieName, sealedSession, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-      maxAge: 60 * 60 * 24 * 30, // 30 days
-      path: '/',
-    });
 
     return response;
   } catch (err) {
