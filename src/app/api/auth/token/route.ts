@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSessionData } from '@/lib/session';
 import { sealData, unsealData } from 'iron-session';
 
 export const dynamic = 'force-dynamic';
