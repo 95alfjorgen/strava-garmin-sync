@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { garminService } from '@/lib/services/garmin.service';
 import { unsealData } from 'iron-session';
-import { prisma } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,7 +43,7 @@ const connectSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     // Try cookie-based auth first
-    let session = await getSessionFromRequest(request);
+    const session = await getSessionFromRequest(request);
     let userId = session.userId;
 
     // If cookie auth fails, try token-based auth from request body
