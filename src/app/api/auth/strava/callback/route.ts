@@ -105,8 +105,8 @@ export async function GET(request: NextRequest) {
     // Set the session cookie directly on the response
     response.cookies.set(sessionOptions.cookieName, sealedSession, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: true,
+      sameSite: 'none',
       maxAge: 60 * 60 * 24 * 30, // 30 days
       path: '/',
     });
