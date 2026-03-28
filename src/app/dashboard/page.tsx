@@ -53,9 +53,10 @@ export default function Dashboard() {
   const [history, setHistory] = useState<SyncRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [garminForm, setGarminForm] = useState({ email: '', password: '' });
+  const [garminForm, setGarminForm] = useState({ email: '', password: '', tokenData: '' });
   const [garminLoading, setGarminLoading] = useState(false);
   const [garminError, setGarminError] = useState<string | null>(null);
+  const [useTokenMode, setUseTokenMode] = useState(false);
 
   useEffect(() => {
     // Check for token in URL hash (from OAuth callback)
@@ -119,10 +120,15 @@ export default function Dashboard() {
     setGarminError(null);
 
     try {
-      const res = await authFetch('/api/auth/garmin/connect', {
+      const endpoint = useTokenMode ? '/api/auth/garmin/token' : '/api/auth/garmin/connect';
+      const payload = useTokenMode
+        ? { email: garminForm.email, password: garminForm.password, tokenData: garminForm.tokenData }
+        : { email: garminForm.email, password: garminForm.password };
+
+      const res = await authFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(garminForm),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -132,7 +138,7 @@ export default function Dashboard() {
         throw new Error(data.error || 'Failed to connect Garmin');
       }
 
-      setGarminForm({ email: '', password: '' });
+      setGarminForm({ email: '', password: '', tokenData: '' });
       fetchData();
     } catch (err) {
       setGarminError(err instanceof Error ? err.message : 'Connection failed');
@@ -252,6 +258,17 @@ export default function Dashboard() {
                 {garminError && (
                   <p className="text-sm text-red-500">{garminError}</p>
                 )}
+                <div className="flex items-center gap-2 text-sm">
+                  <label className="flex items-center gap-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={useTokenMode}
+                      onChange={(e) => setUseTokenMode(e.target.checked)}
+                      className="rounded"
+                    />
+                    Use token (bypass rate limit)
+                  </label>
+                </div>
                 <input
                   type="email"
                   placeholder="Garmin email"
@@ -268,6 +285,15 @@ export default function Dashboard() {
                   className="input"
                   required
                 />
+                {useTokenMode && (
+                  <textarea
+                    placeholder='Paste token JSON from local script'
+                    value={garminForm.tokenData}
+                    onChange={(e) => setGarminForm({ ...garminForm, tokenData: e.target.value })}
+                    className="input min-h-[80px] text-xs font-mono"
+                    required
+                  />
+                )}
                 <button
                   type="submit"
                   disabled={garminLoading}
@@ -275,9 +301,15 @@ export default function Dashboard() {
                 >
                   {garminLoading ? 'Connecting...' : 'Connect Garmin'}
                 </button>
-                <p className="text-xs text-slate-500">
-                  Note: 2FA must be disabled on your Garmin account
-                </p>
+                {useTokenMode ? (
+                  <p className="text-xs text-slate-500">
+                    Run locally: node scripts/generate-garmin-token.js email password
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-500">
+                    Note: 2FA must be disabled. If rate limited, use token mode.
+                  </p>
+                )}
               </form>
             )}
           </div>
