@@ -29,6 +29,20 @@ interface SyncRecord {
   createdAt: string;
 }
 
+interface StravaActivity {
+  id: number;
+  name: string;
+  type: string;
+  sport_type: string;
+  start_date: string;
+  distance: number;
+  moving_time: number;
+  elapsed_time: number;
+  total_elevation_gain: number;
+  syncStatus: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | null;
+  garminActivityId: string | null;
+}
+
 // Helper to get auth token from localStorage
 function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null;
@@ -51,12 +65,14 @@ export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [stats, setStats] = useState<SyncStats | null>(null);
   const [history, setHistory] = useState<SyncRecord[]>([]);
+  const [activities, setActivities] = useState<StravaActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [garminForm, setGarminForm] = useState({ email: '', password: '', tokenData: '' });
   const [garminLoading, setGarminLoading] = useState(false);
   const [garminError, setGarminError] = useState<string | null>(null);
   const [useTokenMode, setUseTokenMode] = useState(false);
+  const [syncingActivity, setSyncingActivity] = useState<number | null>(null);
 
   useEffect(() => {
     // Check for token in URL hash (from OAuth callback)
@@ -80,10 +96,11 @@ export default function Dashboard() {
         return;
       }
 
-      const [userRes, statsRes, historyRes] = await Promise.all([
+      const [userRes, statsRes, historyRes, activitiesRes] = await Promise.all([
         authFetch('/api/user'),
         authFetch('/api/sync/stats'),
         authFetch('/api/sync/history?limit=10'),
+        authFetch('/api/strava/activities'),
       ]);
 
       if (!userRes.ok) {
@@ -106,6 +123,11 @@ export default function Dashboard() {
       if (historyRes.ok) {
         const historyData = await historyRes.json();
         setHistory(historyData.records || []);
+      }
+
+      if (activitiesRes.ok) {
+        const activitiesData = await activitiesRes.json();
+        setActivities(activitiesData.activities || []);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -158,6 +180,43 @@ export default function Dashboard() {
     } catch (err) {
       console.error('Failed to disconnect Garmin:', err);
     }
+  }
+
+  async function syncActivity(activityId: number) {
+    setSyncingActivity(activityId);
+    try {
+      const res = await authFetch('/api/sync/trigger', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stravaActivityId: activityId }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Sync failed');
+      } else {
+        // Refresh data to show updated status
+        fetchData();
+      }
+    } catch (err) {
+      console.error('Sync error:', err);
+      alert('Failed to trigger sync');
+    } finally {
+      setSyncingActivity(null);
+    }
+  }
+
+  function formatDuration(seconds: number): string {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
+  function formatDistance(meters: number): string {
+    const km = meters / 1000;
+    return `${km.toFixed(2)} km`;
   }
 
   if (loading) {
@@ -333,6 +392,71 @@ export default function Dashboard() {
             <div className="card text-center">
               <p className="text-3xl font-bold text-red-500">{stats.failed}</p>
               <p className="text-sm text-slate-500">Failed</p>
+            </div>
+          </div>
+        )}
+
+        {/* Strava Activities */}
+        {user?.garminConnected && activities.length > 0 && (
+          <div className="card mb-8">
+            <h2 className="text-lg font-semibold mb-4">Strava Activities</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-slate-200 dark:border-slate-700">
+                    <th className="text-left py-3 px-2 text-sm font-medium text-slate-500">Activity</th>
+                    <th className="text-left py-3 px-2 text-sm font-medium text-slate-500">Type</th>
+                    <th className="text-left py-3 px-2 text-sm font-medium text-slate-500">Distance</th>
+                    <th className="text-left py-3 px-2 text-sm font-medium text-slate-500">Duration</th>
+                    <th className="text-left py-3 px-2 text-sm font-medium text-slate-500">Date</th>
+                    <th className="text-left py-3 px-2 text-sm font-medium text-slate-500">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activities.map((activity) => (
+                    <tr key={activity.id} className="border-b border-slate-100 dark:border-slate-800">
+                      <td className="py-3 px-2">
+                        <span className="font-medium">{activity.name}</span>
+                      </td>
+                      <td className="py-3 px-2 text-sm text-slate-600 dark:text-slate-400">
+                        {activity.sport_type || activity.type}
+                      </td>
+                      <td className="py-3 px-2 text-sm text-slate-600 dark:text-slate-400">
+                        {formatDistance(activity.distance)}
+                      </td>
+                      <td className="py-3 px-2 text-sm text-slate-600 dark:text-slate-400">
+                        {formatDuration(activity.moving_time)}
+                      </td>
+                      <td className="py-3 px-2 text-sm text-slate-600 dark:text-slate-400">
+                        {new Date(activity.start_date).toLocaleDateString()}
+                      </td>
+                      <td className="py-3 px-2">
+                        {activity.syncStatus === 'COMPLETED' ? (
+                          <span className="badge badge-success">Synced</span>
+                        ) : activity.syncStatus === 'PROCESSING' || activity.syncStatus === 'PENDING' ? (
+                          <span className="badge badge-warning">{activity.syncStatus}</span>
+                        ) : activity.syncStatus === 'FAILED' ? (
+                          <button
+                            onClick={() => syncActivity(activity.id)}
+                            disabled={syncingActivity === activity.id}
+                            className="text-sm text-orange-500 hover:text-orange-600"
+                          >
+                            {syncingActivity === activity.id ? 'Syncing...' : 'Retry'}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => syncActivity(activity.id)}
+                            disabled={syncingActivity === activity.id}
+                            className="text-sm text-blue-500 hover:text-blue-600"
+                          >
+                            {syncingActivity === activity.id ? 'Syncing...' : 'Sync to Garmin'}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
