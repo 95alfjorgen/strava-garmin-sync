@@ -148,46 +148,60 @@ export class GarminService {
       password: password,
     });
 
-    // Try to restore session first
+    // Try to restore session first - this is the primary auth method
     if (user.garminSessionData) {
       try {
         const sessionData = JSON.parse(user.garminSessionData);
-        await client.loadToken(sessionData);
+        console.log('Loading Garmin session from stored tokens...');
 
-        // Verify session is still valid with a simple API call
-        await client.getUserInfo();
+        // Load the tokens directly into the client
+        if (sessionData.oauth1) {
+          client.client.oauth1Token = sessionData.oauth1;
+        }
+        if (sessionData.oauth2) {
+          client.client.oauth2Token = sessionData.oauth2;
+        }
 
-        // Session is valid, cache and return
+        // Cache and return - don't verify to avoid unnecessary API calls
         this.clientCache.set(userId, client);
+        console.log('Garmin session restored from tokens');
         return client;
-      } catch {
-        // Session is expired, need to re-authenticate
-        console.log('Garmin session expired, re-authenticating...');
+      } catch (err) {
+        console.error('Failed to restore Garmin session:', err);
       }
     }
 
-    // Authenticate with credentials
-    await client.login();
-
-    // Try to save new session
+    // Only try login if we have no session data
+    // This will likely fail with rate limit, so warn the user
+    console.log('No stored session, attempting fresh login (may be rate limited)...');
     try {
-      const exportedSession = await client.exportToken();
-      if (exportedSession) {
-        await prisma.user.update({
-          where: { id: userId },
-          data: {
-            garminSessionData: JSON.stringify(exportedSession),
-          },
-        });
+      await client.login();
+
+      // Try to save new session
+      try {
+        const exportedSession = await client.exportToken();
+        if (exportedSession) {
+          await prisma.user.update({
+            where: { id: userId },
+            data: {
+              garminSessionData: JSON.stringify(exportedSession),
+            },
+          });
+        }
+      } catch {
+        console.warn('Could not export new Garmin session');
       }
-    } catch {
-      console.warn('Could not export new Garmin session');
+
+      // Cache the client
+      this.clientCache.set(userId, client);
+      return client;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      if (message.includes('429') || message.includes('Rate')) {
+        throw new Error('Garmin rate limited. Please re-upload your tokens using the token mode on the dashboard.');
+      }
+      throw error;
     }
-
-    // Cache the client
-    this.clientCache.set(userId, client);
-
-    return client;
   }
 
   /**
