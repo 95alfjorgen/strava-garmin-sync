@@ -70,9 +70,18 @@ export async function POST(request: NextRequest) {
       stravaActivityId
     );
 
+    // Get the final sync status
+    const syncRecord = await prisma.syncRecord.findUnique({
+      where: { id: result.syncRecordId },
+      select: { status: true, errorMessage: true, garminActivityId: true },
+    });
+
     return NextResponse.json({
-      success: true,
+      success: syncRecord?.status === 'COMPLETED',
       syncRecordId: result.syncRecordId,
+      status: syncRecord?.status,
+      garminActivityId: syncRecord?.garminActivityId,
+      error: syncRecord?.errorMessage,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal server error';

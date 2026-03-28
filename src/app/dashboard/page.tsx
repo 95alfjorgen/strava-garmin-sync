@@ -194,10 +194,13 @@ export default function Dashboard() {
       const data = await res.json();
       if (!res.ok) {
         alert(data.error || 'Sync failed');
-      } else {
-        // Refresh data to show updated status
-        fetchData();
+      } else if (data.status === 'FAILED') {
+        alert(`Sync failed: ${data.error || 'Unknown error'}`);
+      } else if (data.status === 'COMPLETED') {
+        alert('Activity synced to Garmin!');
       }
+      // Refresh data to show updated status
+      fetchData();
     } catch (err) {
       console.error('Sync error:', err);
       alert('Failed to trigger sync');
