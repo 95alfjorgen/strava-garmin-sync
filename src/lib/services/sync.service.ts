@@ -241,13 +241,9 @@ export class SyncService {
           },
         });
 
-    // Queue sync job
-    const { addSyncJob } = await import('@/lib/queue');
-    await addSyncJob({
-      syncRecordId: syncRecord.id,
-      userId,
-      stravaActivityId,
-    });
+    // Process sync directly (no queue for now)
+    // This runs synchronously but is simpler than setting up Redis
+    await this.syncActivity(userId, stravaActivityId, syncRecord.id);
 
     return { syncRecordId: syncRecord.id };
   }
