@@ -64,24 +64,41 @@ export async function POST(request: NextRequest) {
     }
 
     // Encrypt password and store
-    const encryptedPassword = encrypt(password);
+    let encryptedPassword;
+    try {
+      encryptedPassword = encrypt(password);
+    } catch (encryptErr) {
+      console.error('Encryption failed:', encryptErr);
+      return NextResponse.json(
+        { error: `Encryption failed: ${encryptErr instanceof Error ? encryptErr.message : 'unknown'}` },
+        { status: 500 }
+      );
+    }
 
     // Update user record with tokens
-    await prisma.user.update({
-      where: { id: session.userId },
-      data: {
-        garminEmail: email,
-        garminPasswordEnc: encryptedPassword,
-        garminSessionData: tokenData,
-        garminConnected: true,
-      },
-    });
+    try {
+      await prisma.user.update({
+        where: { id: session.userId },
+        data: {
+          garminEmail: email,
+          garminPasswordEnc: encryptedPassword,
+          garminSessionData: tokenData,
+          garminConnected: true,
+        },
+      });
+    } catch (dbErr) {
+      console.error('Database update failed:', dbErr);
+      return NextResponse.json(
+        { error: `Database error: ${dbErr instanceof Error ? dbErr.message : 'unknown'}` },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error uploading Garmin tokens:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: `Internal server error: ${error instanceof Error ? error.message : 'unknown'}` },
       { status: 500 }
     );
   }
