@@ -1,5 +1,9 @@
-import { Encoder, Profile } from '@garmin/fitsdk';
 import type { StravaActivity, StravaActivityStreams } from '@/lib/types/strava';
+
+// Dynamic import to handle module without type definitions
+// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+const fitsdk: any = require('@garmin/fitsdk');
+const { Encoder, Profile } = fitsdk;
 
 // Message numbers from Profile.MesgNum
 const MesgNum = Profile.MesgNum;
