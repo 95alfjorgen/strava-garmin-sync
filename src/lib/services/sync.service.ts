@@ -231,7 +231,7 @@ export class SyncService {
     const syncRecord = existing
       ? await prisma.syncRecord.update({
           where: { id: existing.id },
-          data: { status: 'PENDING', errorMessage: null },
+          data: { status: 'PENDING', errorMessage: null, retryCount: 0 },
         })
       : await prisma.syncRecord.create({
           data: {
@@ -242,10 +242,83 @@ export class SyncService {
         });
 
     // Process sync directly (no queue for now)
-    // This runs synchronously but is simpler than setting up Redis
-    await this.syncActivity(userId, stravaActivityId, syncRecord.id);
+    try {
+      console.log(`Starting sync for activity ${stravaActivityId}`);
+      await this.syncActivityDirect(userId, stravaActivityId, syncRecord.id);
+      console.log(`Sync completed for activity ${stravaActivityId}`);
+    } catch (error) {
+      console.error(`Sync failed for activity ${stravaActivityId}:`, error);
+      // Mark as failed immediately for manual syncs
+      await this.updateSyncRecord(syncRecord.id, {
+        status: 'FAILED',
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
 
     return { syncRecordId: syncRecord.id };
+  }
+
+  /**
+   * Direct sync without retry logic (for manual triggers)
+   */
+  private async syncActivityDirect(
+    userId: string,
+    stravaActivityId: number,
+    syncRecordId: string
+  ): Promise<void> {
+    // Update status to processing
+    await this.updateSyncRecord(syncRecordId, {
+      status: 'PROCESSING',
+    });
+
+    // Get valid Strava access token
+    console.log('Getting Strava access token...');
+    const accessToken = await stravaService.getValidAccessToken(userId);
+
+    // Fetch activity details
+    console.log('Fetching activity from Strava...');
+    const activity = await stravaService.getActivity(accessToken, stravaActivityId);
+
+    // Update record with activity info
+    await this.updateSyncRecord(syncRecordId, {
+      activityType: activity.sport_type || activity.type,
+      activityName: activity.name,
+    });
+
+    // Fetch activity streams
+    console.log('Fetching activity streams...');
+    const streams = await stravaService.getActivityStreams(
+      accessToken,
+      stravaActivityId
+    );
+
+    // Convert to FIT format
+    console.log('Converting to FIT format...');
+    const fitFile = conversionService.convertToFit(activity, streams);
+    const fileName = conversionService.generateFileName(activity);
+    console.log(`FIT file generated: ${fileName}, size: ${fitFile.length} bytes`);
+
+    // Upload to Garmin
+    console.log('Uploading to Garmin...');
+    const uploadResult = await garminService.uploadActivity(
+      userId,
+      fitFile,
+      fileName
+    );
+
+    if (!uploadResult.success) {
+      throw new Error(uploadResult.error || 'Garmin upload failed');
+    }
+
+    // Update record as completed
+    await this.updateSyncRecord(syncRecordId, {
+      status: 'COMPLETED',
+      garminActivityId: uploadResult.activityId,
+      syncedAt: new Date(),
+      errorMessage: null,
+    });
+
+    console.log(`Activity synced successfully: ${uploadResult.activityId}`);
   }
 }
 
