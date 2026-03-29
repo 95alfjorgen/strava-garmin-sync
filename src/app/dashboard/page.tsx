@@ -21,9 +21,10 @@ interface SyncRecord {
   id: string;
   stravaActivityId: string;
   garminActivityId: string | null;
-  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'SKIPPED';
   activityType: string | null;
   activityName: string | null;
+  deviceName: string | null;
   syncedAt: string | null;
   errorMessage: string | null;
   createdAt: string;
@@ -478,6 +479,7 @@ export default function Dashboard() {
                   <tr className="border-b border-slate-200 dark:border-slate-700">
                     <th className="text-left py-3 px-2 text-sm font-medium text-slate-500">Activity</th>
                     <th className="text-left py-3 px-2 text-sm font-medium text-slate-500">Type</th>
+                    <th className="text-left py-3 px-2 text-sm font-medium text-slate-500">Device</th>
                     <th className="text-left py-3 px-2 text-sm font-medium text-slate-500">Status</th>
                     <th className="text-left py-3 px-2 text-sm font-medium text-slate-500">Date</th>
                   </tr>
@@ -491,6 +493,9 @@ export default function Dashboard() {
                       <td className="py-3 px-2 text-sm text-slate-600 dark:text-slate-400">
                         {record.activityType || '-'}
                       </td>
+                      <td className="py-3 px-2 text-sm text-slate-600 dark:text-slate-400">
+                        {record.deviceName || '-'}
+                      </td>
                       <td className="py-3 px-2">
                         <span
                           className={`badge ${
@@ -500,10 +505,13 @@ export default function Dashboard() {
                               ? 'badge-error'
                               : record.status === 'PROCESSING'
                               ? 'badge-info'
+                              : record.status === 'SKIPPED'
+                              ? 'badge-secondary'
                               : 'badge-warning'
                           }`}
+                          title={record.status === 'SKIPPED' ? 'Already on Garmin' : record.errorMessage || ''}
                         >
-                          {record.status}
+                          {record.status === 'SKIPPED' ? 'SKIPPED (Garmin)' : record.status}
                         </span>
                       </td>
                       <td className="py-3 px-2 text-sm text-slate-600 dark:text-slate-400">

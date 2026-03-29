@@ -12,6 +12,7 @@ enum SyncStatus {
   PROCESSING
   COMPLETED
   FAILED
+  SKIPPED
 }
 
 model User {
@@ -45,6 +46,7 @@ model SyncRecord {
   status           SyncStatus @default(PENDING)
   activityType     String?
   activityName     String?
+  deviceName       String?    // Source device (for filtering display)
   syncedAt         DateTime?
   errorMessage     String?
   retryCount       Int        @default(0)

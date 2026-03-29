@@ -130,6 +130,20 @@ export async function POST(request: NextRequest) {
     // Check if activity is from a Garmin device
     if (isFromGarminDevice(activity.device_name, activity.external_id)) {
       console.log(`Activity ${event.object_id} is from Garmin device - skipping sync (already on Garmin)`);
+
+      // Record as skipped so it shows in the UI
+      await prisma.syncRecord.create({
+        data: {
+          userId: user.id,
+          stravaActivityId: BigInt(event.object_id),
+          status: 'SKIPPED',
+          activityType: activity.sport_type || activity.type,
+          activityName: activity.name,
+          deviceName: activity.device_name || 'Garmin device',
+          errorMessage: 'From Garmin device - already synced',
+        },
+      });
+
       return NextResponse.json({ received: true, skipped: 'garmin_device' });
     }
 
@@ -143,6 +157,7 @@ export async function POST(request: NextRequest) {
         status: 'PENDING',
         activityType: activity.sport_type || activity.type,
         activityName: activity.name,
+        deviceName: activity.device_name || 'Unknown',
       },
     });
 
