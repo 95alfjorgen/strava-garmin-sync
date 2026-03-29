@@ -3,45 +3,11 @@ import { stravaService } from './strava.service';
 import { garminService } from './garmin.service';
 import { conversionService } from './conversion.service';
 import type { SyncStatus, SyncRecord } from '@prisma/client';
-import type { StravaActivity } from '@/lib/types/strava';
 
 export interface SyncResult {
   success: boolean;
   garminActivityId?: string;
   error?: string;
-}
-
-/**
- * Check if an activity was recorded on a Garmin device
- * These activities are already on Garmin Connect, so we skip syncing them
- */
-function isFromGarminDevice(activity: StravaActivity): boolean {
-  const deviceName = activity.device_name?.toLowerCase() || '';
-  const externalId = activity.external_id?.toLowerCase() || '';
-
-  // Check device name for Garmin
-  if (deviceName.includes('garmin')) {
-    return true;
-  }
-
-  // Check external_id - Garmin activities often have garmin in the external_id
-  if (externalId.includes('garmin')) {
-    return true;
-  }
-
-  // Common Garmin device names (without "Garmin" in name)
-  const garminDevices = [
-    'edge', 'forerunner', 'fenix', 'venu', 'vivoactive', 'instinct',
-    'enduro', 'epix', 'marq', 'descent', 'tactix', 'quatix', 'approach'
-  ];
-
-  for (const device of garminDevices) {
-    if (deviceName.includes(device)) {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 export class SyncService {

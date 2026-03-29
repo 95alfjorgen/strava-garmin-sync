@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
     console.log(`Activity ${event.object_id} is NOT from Garmin - will sync to Garmin Connect`);
 
     // Create sync record
-    const syncRecord = await prisma.syncRecord.create({
+    await prisma.syncRecord.create({
       data: {
         userId: user.id,
         stravaActivityId: BigInt(event.object_id),
