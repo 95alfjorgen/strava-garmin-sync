@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Switch } from '@/components/ui/switch';
 import {
   Table,
   TableBody,
@@ -455,14 +456,16 @@ export default function Dashboard() {
                     {user.liveSyncEnabled ? 'Live Sync Active' : 'Live Sync Disabled'}
                   </CardTitle>
                 </div>
-                <Button
-                  variant={user.liveSyncEnabled ? "outline" : "default"}
-                  size="sm"
-                  onClick={toggleLiveSync}
-                  disabled={togglingLiveSync}
-                >
-                  {togglingLiveSync ? 'Updating...' : user.liveSyncEnabled ? 'Turn Off' : 'Turn On'}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">
+                    {togglingLiveSync ? 'Updating...' : user.liveSyncEnabled ? 'On' : 'Off'}
+                  </span>
+                  <Switch
+                    checked={user.liveSyncEnabled}
+                    onCheckedChange={toggleLiveSync}
+                    disabled={togglingLiveSync}
+                  />
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-2">
