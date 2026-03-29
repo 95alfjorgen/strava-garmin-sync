@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
-    "start": "prisma db push && next start",
+    "start": "prisma db push --force-reset && next start",
     "lint": "next lint",
     "worker": "tsx src/workers/sync-worker.ts",
     "worker:dev": "tsx watch src/workers/sync-worker.ts",
