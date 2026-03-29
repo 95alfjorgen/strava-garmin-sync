@@ -10,6 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import {
   Table,
   TableBody,
@@ -452,19 +453,18 @@ export default function Dashboard() {
                   ) : (
                     <div className="w-3 h-3 bg-muted-foreground rounded-full" />
                   )}
-                  <CardTitle className="text-lg">
-                    {user.liveSyncEnabled ? 'Live Sync Active' : 'Live Sync Disabled'}
-                  </CardTitle>
+                  <CardTitle className="text-lg">Live Sync</CardTitle>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">
-                    {togglingLiveSync ? 'Updating...' : user.liveSyncEnabled ? 'On' : 'Off'}
-                  </span>
+                <div className="flex items-center space-x-2">
                   <Switch
+                    id="live-sync"
                     checked={user.liveSyncEnabled}
                     onCheckedChange={toggleLiveSync}
                     disabled={togglingLiveSync}
                   />
+                  <Label htmlFor="live-sync">
+                    {togglingLiveSync ? 'Updating...' : user.liveSyncEnabled ? 'Enabled' : 'Disabled'}
+                  </Label>
                 </div>
               </div>
             </CardHeader>
