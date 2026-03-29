@@ -1,12 +1,18 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useSession, signOut } from "@/lib/auth-client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 interface User {
   id: string;
-  stravaAthleteId: number;
+  email: string;
+  name: string | null;
+  stravaConnected: boolean;
+  stravaAthleteId: number | null;
   garminConnected: boolean;
   garminEmail: string | null;
   createdAt: string;
@@ -14,28 +20,35 @@ interface User {
 
 export default function Settings() {
   const router = useRouter();
+  const { data: session, isPending: sessionPending } = useSession();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
-    fetchUser();
-  }, []);
+    if (!sessionPending && !session?.user) {
+      router.push("/login");
+      return;
+    }
+    if (session?.user) {
+      fetchUser();
+    }
+  }, [session, sessionPending, router]);
 
   async function fetchUser() {
     try {
-      const res = await fetch('/api/user');
+      const res = await fetch("/api/user");
       if (!res.ok) {
         if (res.status === 401) {
-          router.push('/');
+          router.push("/login");
           return;
         }
-        throw new Error('Failed to fetch user');
+        throw new Error("Failed to fetch user");
       }
       const data = await res.json();
       setUser(data);
     } catch (err) {
-      console.error('Error fetching user:', err);
+      console.error("Error fetching user:", err);
     } finally {
       setLoading(false);
     }
@@ -44,139 +57,154 @@ export default function Settings() {
   async function deleteAccount() {
     if (
       !confirm(
-        'Are you sure you want to delete your account? This will remove all your data and cannot be undone.'
+        "Are you sure you want to delete your account? This will remove all your data and cannot be undone."
       )
     ) {
       return;
     }
 
-    if (!confirm('This is your last chance. Delete account permanently?')) {
+    if (!confirm("This is your last chance. Delete account permanently?")) {
       return;
     }
 
     setDeleteLoading(true);
     try {
-      const res = await fetch('/api/user', { method: 'DELETE' });
+      const res = await fetch("/api/user", { method: "DELETE" });
       if (res.ok) {
-        router.push('/');
+        await signOut();
+        router.push("/");
       } else {
-        alert('Failed to delete account');
+        alert("Failed to delete account");
       }
     } catch (err) {
-      console.error('Error deleting account:', err);
-      alert('Failed to delete account');
+      console.error("Error deleting account:", err);
+      alert("Failed to delete account");
     } finally {
       setDeleteLoading(false);
     }
   }
 
-  if (loading) {
+  if (sessionPending || loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500" />
+      <div className="flex items-center justify-center h-[50vh]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
       </div>
     );
   }
 
   return (
-    <main className="min-h-screen">
-      {/* Header */}
-      <header className="border-b border-slate-200 dark:border-slate-700">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/" className="text-xl font-bold">
-            <span className="text-orange-500">Strava</span>
-            <span className="text-slate-400 mx-1">to</span>
-            <span className="text-blue-600">Garmin</span>
-          </Link>
-          <div className="flex items-center gap-4">
-            <Link href="/dashboard" className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">
-              Dashboard
-            </Link>
-            <Link href="/api/auth/logout" className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">
-              Log out
-            </Link>
+    <div className="max-w-2xl space-y-6">
+      <h1 className="text-2xl font-bold">Settings</h1>
+
+      {/* Account Info */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Account Information</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex justify-between items-center py-2 border-b">
+            <span className="text-muted-foreground">Email</span>
+            <span>{user?.email}</span>
           </div>
-        </div>
-      </header>
-
-      <div className="max-w-2xl mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold mb-8">Settings</h1>
-
-        {/* Account Info */}
-        <div className="card mb-6">
-          <h2 className="text-lg font-semibold mb-4">Account Information</h2>
-          <div className="space-y-3">
-            <div className="flex justify-between">
-              <span className="text-slate-500">Strava Athlete ID</span>
-              <span>{user?.stravaAthleteId}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Garmin Account</span>
-              <span>{user?.garminConnected ? user.garminEmail : 'Not connected'}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Member since</span>
-              <span>
-                {user?.createdAt
-                  ? new Date(user.createdAt).toLocaleDateString()
-                  : '-'}
-              </span>
-            </div>
+          <div className="flex justify-between items-center py-2 border-b">
+            <span className="text-muted-foreground">Name</span>
+            <span>{user?.name || "-"}</span>
           </div>
-        </div>
+          <div className="flex justify-between items-center py-2 border-b">
+            <span className="text-muted-foreground">Strava</span>
+            <span className="flex items-center gap-2">
+              {user?.stravaConnected ? (
+                <>
+                  <Badge className="bg-green-100 text-green-700">Connected</Badge>
+                  <span className="text-sm text-muted-foreground">
+                    ID: {user.stravaAthleteId}
+                  </span>
+                </>
+              ) : (
+                <Badge variant="secondary">Not Connected</Badge>
+              )}
+            </span>
+          </div>
+          <div className="flex justify-between items-center py-2 border-b">
+            <span className="text-muted-foreground">Garmin</span>
+            <span>
+              {user?.garminConnected ? (
+                <Badge className="bg-green-100 text-green-700">{user.garminEmail}</Badge>
+              ) : (
+                <Badge variant="secondary">Not Connected</Badge>
+              )}
+            </span>
+          </div>
+          <div className="flex justify-between items-center py-2">
+            <span className="text-muted-foreground">Member since</span>
+            <span>
+              {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : "-"}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
 
-        {/* Sync Settings */}
-        <div className="card mb-6">
-          <h2 className="text-lg font-semibold mb-4">Sync Settings</h2>
-          <p className="text-slate-600 dark:text-slate-400 text-sm mb-4">
-            Activities are automatically synced when Strava sends a webhook notification.
-            This typically happens within seconds of completing an activity.
+      {/* Sync Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Sync Settings</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground text-sm mb-4">
+            Activities are automatically synced when Strava sends a webhook notification. This
+            typically happens within seconds of completing an activity.
           </p>
-          <div className="flex items-center justify-between py-2 border-t border-slate-200 dark:border-slate-700">
+          <div className="flex items-center justify-between py-2 border-t">
             <span>Auto-sync enabled</span>
-            <span className="badge badge-success">Active</span>
+            <Badge className="bg-green-100 text-green-700">Active</Badge>
           </div>
-        </div>
+        </CardContent>
+      </Card>
 
-        {/* Data & Privacy */}
-        <div className="card mb-6">
-          <h2 className="text-lg font-semibold mb-4">Data & Privacy</h2>
-          <div className="space-y-4">
-            <div>
-              <h3 className="font-medium mb-1">What we store</h3>
-              <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-1">
-                <li>- Strava OAuth tokens (for accessing your activities)</li>
-                <li>- Garmin credentials (encrypted with AES-256-GCM)</li>
-                <li>- Sync history (activity IDs and status)</li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="font-medium mb-1">What we don&apos;t store</h3>
-              <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-1">
-                <li>- Your activity data (fetched on-demand and not persisted)</li>
-                <li>- GPS tracks or workout details</li>
-              </ul>
-            </div>
+      {/* Data & Privacy */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Data & Privacy</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <h3 className="font-medium mb-2">What we store</h3>
+            <ul className="text-sm text-muted-foreground space-y-1">
+              <li>- Google account info (email, name, profile picture)</li>
+              <li>- Strava OAuth tokens (for accessing your activities)</li>
+              <li>- Garmin credentials (encrypted with AES-256-GCM)</li>
+              <li>- Sync history (activity IDs and status)</li>
+            </ul>
           </div>
-        </div>
+          <div>
+            <h3 className="font-medium mb-2">What we don&apos;t store</h3>
+            <ul className="text-sm text-muted-foreground space-y-1">
+              <li>- Your activity data (fetched on-demand and not persisted)</li>
+              <li>- GPS tracks or workout details</li>
+            </ul>
+          </div>
+        </CardContent>
+      </Card>
 
-        {/* Danger Zone */}
-        <div className="card border-red-200 dark:border-red-800">
-          <h2 className="text-lg font-semibold mb-4 text-red-500">Danger Zone</h2>
-          <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-            Deleting your account will permanently remove all your data including
-            Strava tokens, Garmin credentials, and sync history. This action cannot
-            be undone.
+      {/* Danger Zone */}
+      <Card className="border-red-200 dark:border-red-800">
+        <CardHeader>
+          <CardTitle className="text-red-500">Danger Zone</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-4">
+            Deleting your account will permanently remove all your data including Strava tokens,
+            Garmin credentials, and sync history. This action cannot be undone.
           </p>
-          <button
+          <Button
+            variant="destructive"
             onClick={deleteAccount}
             disabled={deleteLoading}
-            className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50"
           >
-            {deleteLoading ? 'Deleting...' : 'Delete Account'}
-          </button>
-        </div>
-      </div>
-    </main>
+            {deleteLoading ? "Deleting..." : "Delete Account"}
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

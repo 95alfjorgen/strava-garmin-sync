@@ -16,32 +16,75 @@ enum SyncStatus {
 }
 
 model User {
-  id                   String   @id @default(cuid())
-  stravaAthleteId      Int      @unique
-  stravaFirstName      String?
-  stravaLastName       String?
-  stravaProfilePicture String?
+  id                    String    @id @default(cuid())
+  email                 String    @unique
+  emailVerified         Boolean   @default(false)
+  name                  String?
+  image                 String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
-  // Strava OAuth tokens
-  stravaAccessToken    String
-  stravaRefreshToken   String
-  stravaTokenExpiresAt DateTime
+  // Strava Connection (optional - now a service, not login)
+  stravaConnected       Boolean   @default(false)
+  stravaAthleteId       Int?      @unique
+  stravaAccessToken     String?
+  stravaRefreshToken    String?
+  stravaTokenExpiresAt  DateTime?
+  stravaAthleteName     String?
+  stravaAthleteImage    String?
 
-  // Garmin credentials (encrypted)
-  garminEmail          String?
-  garminPasswordEnc    String?  // AES-256-GCM encrypted
-  garminSessionData    String?  // Persisted session to minimize re-auth
-  garminConnected      Boolean  @default(false)
+  // Garmin Connection (encrypted)
+  garminConnected       Boolean   @default(false)
+  garminEmail           String?
+  garminPasswordEnc     String?
+  garminSessionData     String?
 
-  // Sync settings
-  liveSyncEnabled      Boolean  @default(true)  // Auto-sync new Strava activities
-
-  // Timestamps
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  // Settings
+  liveSyncEnabled       Boolean   @default(true)
 
   // Relations
-  syncRecords          SyncRecord[]
+  sessions              Session[]
+  accounts              Account[]
+  syncRecords           SyncRecord[]
+}
+
+model Session {
+  id            String   @id @default(cuid())
+  userId        String
+  token         String   @unique
+  expiresAt     DateTime
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  userId                String
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  idToken               String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 model SyncRecord {
@@ -52,16 +95,14 @@ model SyncRecord {
   status           SyncStatus @default(PENDING)
   activityType     String?
   activityName     String?
-  deviceName       String?    // Source device (for filtering display)
+  deviceName       String?
   syncedAt         DateTime?
   errorMessage     String?
   retryCount       Int        @default(0)
 
-  // Timestamps
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 
-  // Relations
   user             User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])

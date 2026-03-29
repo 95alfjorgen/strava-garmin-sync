@@ -1,31 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
-import { syncService } from '@/lib/services/sync.service';
-import { prisma } from '@/lib/db';
-import { unsealData } from 'iron-session';
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { auth } from "@/lib/auth";
+import { syncService } from "@/lib/services/sync.service";
+import { prisma } from "@/lib/db";
+import { headers } from "next/headers";
 
-export const dynamic = 'force-dynamic';
-
-const SESSION_PASSWORD = process.env.SESSION_SECRET || 'complex_password_at_least_32_characters_long';
-
-interface SessionData {
-  userId?: string;
-  isLoggedIn: boolean;
-}
-
-async function getSessionFromHeader(request: NextRequest): Promise<SessionData> {
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return { isLoggedIn: false };
-  }
-  const token = authHeader.substring(7);
-  try {
-    const data = await unsealData<SessionData>(token, { password: SESSION_PASSWORD });
-    return { ...data, isLoggedIn: data.isLoggedIn ?? false };
-  } catch {
-    return { isLoggedIn: false };
-  }
-}
+export const dynamic = "force-dynamic";
 
 const triggerSchema = z.object({
   stravaActivityId: z.number().int().positive(),
@@ -33,20 +13,31 @@ const triggerSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getSessionFromHeader(request);
-    if (!session.isLoggedIn || !session.userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const headersList = await headers();
+    const session = await auth.api.getSession({
+      headers: headersList,
+    });
+
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Verify Garmin is connected
     const user = await prisma.user.findUnique({
-      where: { id: session.userId },
-      select: { garminConnected: true },
+      where: { id: session.user.id },
+      select: { garminConnected: true, stravaConnected: true },
     });
+
+    if (!user?.stravaConnected) {
+      return NextResponse.json(
+        { error: "Strava account not connected" },
+        { status: 400 }
+      );
+    }
 
     if (!user?.garminConnected) {
       return NextResponse.json(
-        { error: 'Garmin account not connected' },
+        { error: "Garmin account not connected" },
         { status: 400 }
       );
     }
@@ -66,7 +57,7 @@ export async function POST(request: NextRequest) {
 
     // Trigger sync
     const result = await syncService.triggerManualSync(
-      session.userId,
+      session.user.id,
       stravaActivityId
     );
 
@@ -77,20 +68,20 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({
-      success: syncRecord?.status === 'COMPLETED',
+      success: syncRecord?.status === "COMPLETED",
       syncRecordId: result.syncRecordId,
       status: syncRecord?.status,
       garminActivityId: syncRecord?.garminActivityId,
       error: syncRecord?.errorMessage,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Internal server error';
+    const message = error instanceof Error ? error.message : "Internal server error";
 
-    if (message === 'Activity already synced') {
+    if (message === "Activity already synced") {
       return NextResponse.json({ error: message }, { status: 400 });
     }
 
-    console.error('Error triggering sync:', error);
+    console.error("Error triggering sync:", error);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

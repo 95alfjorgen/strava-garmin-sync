@@ -88,6 +88,7 @@ export class StravaService {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
+        stravaConnected: true,
         stravaAccessToken: true,
         stravaRefreshToken: true,
         stravaTokenExpiresAt: true,
@@ -96,6 +97,10 @@ export class StravaService {
 
     if (!user) {
       throw new Error('User not found');
+    }
+
+    if (!user.stravaConnected || !user.stravaAccessToken || !user.stravaRefreshToken || !user.stravaTokenExpiresAt) {
+      throw new Error('Strava not connected');
     }
 
     // Check if token is expired (with 5-minute buffer)

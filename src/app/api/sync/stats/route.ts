@@ -1,44 +1,28 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { syncService } from '@/lib/services/sync.service';
-import { unsealData } from 'iron-session';
+import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { syncService } from "@/lib/services/sync.service";
+import { headers } from "next/headers";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
-const SESSION_PASSWORD = process.env.SESSION_SECRET || 'complex_password_at_least_32_characters_long';
-
-interface SessionData {
-  userId?: string;
-  isLoggedIn: boolean;
-}
-
-async function getSessionFromHeader(request: NextRequest): Promise<SessionData> {
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return { isLoggedIn: false };
-  }
-  const token = authHeader.substring(7);
+export async function GET() {
   try {
-    const data = await unsealData<SessionData>(token, { password: SESSION_PASSWORD });
-    return { ...data, isLoggedIn: data.isLoggedIn ?? false };
-  } catch {
-    return { isLoggedIn: false };
-  }
-}
+    const headersList = await headers();
+    const session = await auth.api.getSession({
+      headers: headersList,
+    });
 
-export async function GET(request: NextRequest) {
-  try {
-    const session = await getSessionFromHeader(request);
-    if (!session.isLoggedIn || !session.userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const stats = await syncService.getSyncStats(session.userId);
+    const stats = await syncService.getSyncStats(session.user.id);
 
     return NextResponse.json(stats);
   } catch (error) {
-    console.error('Error fetching sync stats:', error);
+    console.error("Error fetching sync stats:", error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }

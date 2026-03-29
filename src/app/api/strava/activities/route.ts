@@ -1,49 +1,43 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { stravaService } from '@/lib/services/strava.service';
-import { prisma } from '@/lib/db';
-import { unsealData } from 'iron-session';
+import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { stravaService } from "@/lib/services/strava.service";
+import { prisma } from "@/lib/db";
+import { headers } from "next/headers";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
-const SESSION_PASSWORD = process.env.SESSION_SECRET || 'complex_password_at_least_32_characters_long';
-
-interface SessionData {
-  userId?: string;
-  isLoggedIn: boolean;
-}
-
-async function getSessionFromHeader(request: NextRequest): Promise<SessionData> {
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return { isLoggedIn: false };
-  }
-  const token = authHeader.substring(7);
+export async function GET() {
   try {
-    const data = await unsealData<SessionData>(token, { password: SESSION_PASSWORD });
-    return { ...data, isLoggedIn: data.isLoggedIn ?? false };
-  } catch {
-    return { isLoggedIn: false };
-  }
-}
+    const headersList = await headers();
+    const session = await auth.api.getSession({
+      headers: headersList,
+    });
 
-export async function GET(request: NextRequest) {
-  try {
-    const session = await getSessionFromHeader(request);
-    if (!session.isLoggedIn || !session.userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Check if Strava is connected
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { stravaConnected: true },
+    });
+
+    if (!user?.stravaConnected) {
+      return NextResponse.json({ activities: [] });
     }
 
     // Get access token
-    const accessToken = await stravaService.getValidAccessToken(session.userId);
+    const accessToken = await stravaService.getValidAccessToken(session.user.id);
 
     // Fetch recent activities
     const activities = await stravaService.getRecentActivities(accessToken, 1, 10);
 
     // Get sync status for these activities
-    const activityIds = activities.map(a => BigInt(a.id));
+    const activityIds = activities.map((a) => BigInt(a.id));
     const syncRecords = await prisma.syncRecord.findMany({
       where: {
-        userId: session.userId,
+        userId: session.user.id,
         stravaActivityId: { in: activityIds },
       },
       select: {
@@ -54,11 +48,11 @@ export async function GET(request: NextRequest) {
     });
 
     const syncMap = new Map(
-      syncRecords.map(r => [r.stravaActivityId.toString(), r])
+      syncRecords.map((r) => [r.stravaActivityId.toString(), r])
     );
 
     // Combine activities with sync status
-    const result = activities.map(activity => ({
+    const result = activities.map((activity) => ({
       id: activity.id,
       name: activity.name,
       type: activity.type,
@@ -74,9 +68,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ activities: result });
   } catch (error) {
-    console.error('Error fetching activities:', error);
+    console.error("Error fetching activities:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }
     );
   }

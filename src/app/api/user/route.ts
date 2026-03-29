@@ -1,50 +1,32 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/session';
-import { prisma } from '@/lib/db';
-import { unsealData } from 'iron-session';
+import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+import { headers } from "next/headers";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
-const SESSION_PASSWORD = process.env.SESSION_SECRET || 'complex_password_at_least_32_characters_long';
-
-interface SessionData {
-  userId?: string;
-  stravaAthleteId?: number;
-  isLoggedIn: boolean;
-}
-
-async function getSessionFromHeader(request: NextRequest): Promise<SessionData> {
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return { isLoggedIn: false };
-  }
-
-  const token = authHeader.substring(7);
+export async function GET() {
   try {
-    const data = await unsealData<SessionData>(token, {
-      password: SESSION_PASSWORD,
+    const headersList = await headers();
+    const session = await auth.api.getSession({
+      headers: headersList,
     });
-    return { ...data, isLoggedIn: data.isLoggedIn ?? false };
-  } catch {
-    return { isLoggedIn: false };
-  }
-}
 
-export async function GET(request: NextRequest) {
-  try {
-    const session = await getSessionFromHeader(request);
-    if (!session.isLoggedIn || !session.userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const user = await prisma.user.findUnique({
-      where: { id: session.userId },
+      where: { id: session.user.id },
       select: {
         id: true,
+        email: true,
+        name: true,
+        image: true,
+        stravaConnected: true,
         stravaAthleteId: true,
-        stravaFirstName: true,
-        stravaLastName: true,
-        stravaProfilePicture: true,
+        stravaAthleteName: true,
+        stravaAthleteImage: true,
         garminEmail: true,
         garminConnected: true,
         liveSyncEnabled: true,
@@ -53,25 +35,14 @@ export async function GET(request: NextRequest) {
     });
 
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    return NextResponse.json({
-      id: user.id,
-      stravaAthleteId: user.stravaAthleteId,
-      stravaName: user.stravaFirstName && user.stravaLastName
-        ? `${user.stravaFirstName} ${user.stravaLastName}`
-        : user.stravaFirstName || `Athlete ${user.stravaAthleteId}`,
-      stravaProfilePicture: user.stravaProfilePicture,
-      garminConnected: user.garminConnected,
-      garminEmail: user.garminEmail,
-      liveSyncEnabled: user.liveSyncEnabled,
-      createdAt: user.createdAt,
-    });
+    return NextResponse.json(user);
   } catch (error) {
-    console.error('Error fetching user:', error);
+    console.error("Error fetching user:", error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }
@@ -79,24 +50,25 @@ export async function GET(request: NextRequest) {
 
 export async function DELETE() {
   try {
-    const session = await getSession();
-    if (!session.isLoggedIn || !session.userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const headersList = await headers();
+    const session = await auth.api.getSession({
+      headers: headersList,
+    });
+
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Delete user and all related data (cascade)
     await prisma.user.delete({
-      where: { id: session.userId },
+      where: { id: session.user.id },
     });
-
-    // Destroy session
-    session.destroy();
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error deleting user:', error);
+    console.error("Error deleting user:", error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }

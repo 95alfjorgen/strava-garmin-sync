@@ -1,44 +1,28 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { syncService } from '@/lib/services/sync.service';
-import type { SyncStatus } from '@prisma/client';
-import { unsealData } from 'iron-session';
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { syncService } from "@/lib/services/sync.service";
+import { headers } from "next/headers";
+import type { SyncStatus } from "@prisma/client";
 
-export const dynamic = 'force-dynamic';
-
-const SESSION_PASSWORD = process.env.SESSION_SECRET || 'complex_password_at_least_32_characters_long';
-
-interface SessionData {
-  userId?: string;
-  isLoggedIn: boolean;
-}
-
-async function getSessionFromHeader(request: NextRequest): Promise<SessionData> {
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return { isLoggedIn: false };
-  }
-  const token = authHeader.substring(7);
-  try {
-    const data = await unsealData<SessionData>(token, { password: SESSION_PASSWORD });
-    return { ...data, isLoggedIn: data.isLoggedIn ?? false };
-  } catch {
-    return { isLoggedIn: false };
-  }
-}
+export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getSessionFromHeader(request);
-    if (!session.isLoggedIn || !session.userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const headersList = await headers();
+    const session = await auth.api.getSession({
+      headers: headersList,
+    });
+
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const searchParams = request.nextUrl.searchParams;
-    const limit = parseInt(searchParams.get('limit') || '50', 10);
-    const offset = parseInt(searchParams.get('offset') || '0', 10);
-    const status = searchParams.get('status') as SyncStatus | null;
+    const limit = parseInt(searchParams.get("limit") || "50", 10);
+    const offset = parseInt(searchParams.get("offset") || "0", 10);
+    const status = searchParams.get("status") as SyncStatus | null;
 
-    const history = await syncService.getSyncHistory(session.userId, {
+    const history = await syncService.getSyncHistory(session.user.id, {
       limit: Math.min(limit, 100),
       offset,
       status: status || undefined,
@@ -46,9 +30,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(history);
   } catch (error) {
-    console.error('Error fetching sync history:', error);
+    console.error("Error fetching sync history:", error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }
