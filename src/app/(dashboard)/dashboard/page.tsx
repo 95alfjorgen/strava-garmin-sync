@@ -292,15 +292,15 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500" />
+      <div className="flex items-center justify-center h-[50vh]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex items-center justify-center h-[50vh]">
         <Card className="w-96">
           <CardContent className="pt-6 text-center">
             <p className="text-red-500 mb-4">{error}</p>
@@ -314,28 +314,7 @@ export default function Dashboard() {
   }
 
   return (
-    <main className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/" className="text-xl font-bold">
-            <span className="text-orange-500">Strava</span>
-            <span className="text-muted-foreground mx-1">→</span>
-            <span className="text-blue-600">Garmin</span>
-          </Link>
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" asChild>
-              <Link href="/settings">Settings</Link>
-            </Button>
-            <Button variant="ghost" asChild>
-              <Link href="/api/auth/logout">Log out</Link>
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">
-        <h1 className="text-3xl font-bold">Dashboard</h1>
+    <div className="space-y-6">
 
         {/* Connection Status */}
         <div className="grid md:grid-cols-2 gap-6">
@@ -651,6 +630,5 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
-    </main>
   );
 }
