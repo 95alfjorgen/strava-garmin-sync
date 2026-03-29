@@ -357,16 +357,23 @@ export default function Dashboard() {
                 </Badge>
               </div>
             </CardHeader>
-            <CardContent className="space-y-1">
+            <CardContent className="space-y-3">
               <p className="text-sm text-muted-foreground">Logged in as</p>
-              <p className="text-2xl font-semibold">
-                {user?.stravaName}
-              </p>
-              <div className="pt-3">
-                <Button variant="outline" size="sm" onClick={disconnectStrava}>
-                  Disconnect Account
-                </Button>
+              <div className="flex items-center gap-3">
+                {user?.stravaProfilePicture && (
+                  <img
+                    src={user.stravaProfilePicture}
+                    alt={user.stravaName}
+                    className="w-12 h-12 rounded-full object-cover"
+                  />
+                )}
+                <p className="text-2xl font-semibold">
+                  {user?.stravaName}
+                </p>
               </div>
+              <Button variant="outline" size="sm" onClick={disconnectStrava}>
+                Disconnect Account
+              </Button>
             </CardContent>
           </Card>
 
@@ -395,18 +402,21 @@ export default function Dashboard() {
                 )}
               </div>
             </CardHeader>
-            <CardContent className="space-y-1">
+            <CardContent className="space-y-3">
               {user?.garminConnected ? (
                 <>
                   <p className="text-sm text-muted-foreground">Logged in as</p>
-                  <p className="text-2xl font-semibold">
-                    {user.garminEmail}
-                  </p>
-                  <div className="pt-3">
-                    <Button variant="outline" size="sm" onClick={disconnectGarmin}>
-                      Disconnect Account
-                    </Button>
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-[#007CC3] flex items-center justify-center text-white font-semibold text-lg">
+                      {user.garminEmail?.charAt(0).toUpperCase()}
+                    </div>
+                    <p className="text-xl font-semibold break-all">
+                      {user.garminEmail}
+                    </p>
                   </div>
+                  <Button variant="outline" size="sm" onClick={disconnectGarmin}>
+                    Disconnect Account
+                  </Button>
                 </>
               ) : (
                 <form onSubmit={connectGarmin} className="space-y-4">
