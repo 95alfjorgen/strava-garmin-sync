@@ -339,52 +339,73 @@ export default function Dashboard() {
         <div className="grid md:grid-cols-2 gap-6">
           {/* Strava Card */}
           <Card>
-            <CardHeader className="flex flex-row items-center gap-4 pb-2">
-              <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900 rounded-lg flex items-center justify-center">
-                <svg className="w-6 h-6 text-orange-500" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169" />
-                </svg>
-              </div>
-              <div>
-                <CardTitle className="text-lg">Strava</CardTitle>
-                <CardDescription className="text-green-500 font-medium">Connected</CardDescription>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-base font-medium text-muted-foreground">
+                  <svg className="w-5 h-5 text-[#FC4C02]" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169" />
+                  </svg>
+                  Strava
+                </CardTitle>
+                <Badge className="bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900 dark:text-green-300">
+                  <svg className="w-3 h-3 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  Connected
+                </Badge>
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">
-                  Athlete ID: {user?.stravaAthleteId}
-                </p>
-                <Button variant="destructive" size="sm" onClick={disconnectStrava}>
-                  Disconnect
-                </Button>
-              </div>
+            <CardContent className="space-y-3">
+              <p className="text-2xl font-semibold">
+                Athlete {user?.stravaAthleteId}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Syncing activities from Strava
+              </p>
+              <Button variant="outline" size="sm" onClick={disconnectStrava}>
+                Disconnect Account
+              </Button>
             </CardContent>
           </Card>
 
           {/* Garmin Card */}
           <Card>
-            <CardHeader className="flex flex-row items-center gap-4 pb-2">
-              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
-                <svg className="w-6 h-6 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm0-18C7.582 4 4 7.582 4 12s3.582 8 8 8 8-3.582 8-8-3.582-8-8-8z" />
-                </svg>
-              </div>
-              <div>
-                <CardTitle className="text-lg">Garmin Connect</CardTitle>
-                <CardDescription className={user?.garminConnected ? 'text-green-500 font-medium' : ''}>
-                  {user?.garminConnected ? 'Connected' : 'Not connected'}
-                </CardDescription>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-base font-medium text-muted-foreground">
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="#007CC3" strokeWidth="2"/>
+                    <path d="M12 6v6l4 2" stroke="#007CC3" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                  Garmin Connect
+                </CardTitle>
+                {user?.garminConnected ? (
+                  <Badge className="bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900 dark:text-green-300">
+                    <svg className="w-3 h-3 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    Connected
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary">
+                    Not Connected
+                  </Badge>
+                )}
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
               {user?.garminConnected ? (
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-muted-foreground">{user.garminEmail}</p>
-                  <Button variant="destructive" size="sm" onClick={disconnectGarmin}>
-                    Disconnect
+                <>
+                  <p className="text-2xl font-semibold">
+                    {user.garminEmail}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Activities will sync to this account
+                  </p>
+                  <Button variant="outline" size="sm" onClick={disconnectGarmin}>
+                    Disconnect Account
                   </Button>
-                </div>
+                </>
               ) : (
                 <form onSubmit={connectGarmin} className="space-y-4">
                   {garminError && (
