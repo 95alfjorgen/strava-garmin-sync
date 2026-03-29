@@ -30,6 +30,9 @@ model User {
   garminSessionData    String?  // Persisted session to minimize re-auth
   garminConnected      Boolean  @default(false)
 
+  // Sync settings
+  liveSyncEnabled      Boolean  @default(true)  // Auto-sync new Strava activities
+
   // Timestamps
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt

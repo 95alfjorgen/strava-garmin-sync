@@ -23,6 +23,7 @@ interface User {
   stravaAthleteId: number;
   garminConnected: boolean;
   garminEmail: string | null;
+  liveSyncEnabled: boolean;
 }
 
 interface SyncStats {
@@ -87,6 +88,7 @@ export default function Dashboard() {
   const [garminError, setGarminError] = useState<string | null>(null);
   const [useTokenMode, setUseTokenMode] = useState(false);
   const [syncingActivity, setSyncingActivity] = useState<number | null>(null);
+  const [togglingLiveSync, setTogglingLiveSync] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -192,6 +194,21 @@ export default function Dashboard() {
     }
   }
 
+  async function disconnectStrava() {
+    if (!confirm('Are you sure you want to disconnect your Strava account? This will log you out and delete all sync data.')) {
+      return;
+    }
+
+    try {
+      await authFetch('/api/user', { method: 'DELETE' });
+      localStorage.removeItem('authToken');
+      window.location.href = '/';
+    } catch (err) {
+      console.error('Failed to disconnect Strava:', err);
+      alert('Failed to disconnect. Please try again.');
+    }
+  }
+
   async function syncActivity(activityId: number) {
     setSyncingActivity(activityId);
     try {
@@ -215,6 +232,29 @@ export default function Dashboard() {
       alert('Failed to trigger sync');
     } finally {
       setSyncingActivity(null);
+    }
+  }
+
+  async function toggleLiveSync() {
+    if (!user) return;
+    setTogglingLiveSync(true);
+    try {
+      const res = await authFetch('/api/user/live-sync', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !user.liveSyncEnabled }),
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to update live sync setting');
+      }
+
+      setUser({ ...user, liveSyncEnabled: !user.liveSyncEnabled });
+    } catch (err) {
+      console.error('Toggle error:', err);
+      alert('Failed to update live sync setting');
+    } finally {
+      setTogglingLiveSync(false);
     }
   }
 
@@ -309,9 +349,14 @@ export default function Dashboard() {
               </div>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Athlete ID: {user?.stravaAthleteId}
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">
+                  Athlete ID: {user?.stravaAthleteId}
+                </p>
+                <Button variant="destructive" size="sm" onClick={disconnectStrava}>
+                  Disconnect
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
@@ -394,21 +439,48 @@ export default function Dashboard() {
 
         {/* Live Sync Status */}
         {user?.garminConnected && (
-          <Card className="border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20">
+          <Card className={user.liveSyncEnabled
+            ? "border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20"
+            : "border-muted"
+          }>
             <CardHeader className="pb-2">
-              <div className="flex items-center gap-3">
-                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
-                <CardTitle className="text-lg">Live Sync Active</CardTitle>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {user.liveSyncEnabled ? (
+                    <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
+                  ) : (
+                    <div className="w-3 h-3 bg-muted-foreground rounded-full" />
+                  )}
+                  <CardTitle className="text-lg">
+                    {user.liveSyncEnabled ? 'Live Sync Active' : 'Live Sync Disabled'}
+                  </CardTitle>
+                </div>
+                <Button
+                  variant={user.liveSyncEnabled ? "outline" : "default"}
+                  size="sm"
+                  onClick={toggleLiveSync}
+                  disabled={togglingLiveSync}
+                >
+                  {togglingLiveSync ? 'Updating...' : user.liveSyncEnabled ? 'Turn Off' : 'Turn On'}
+                </Button>
               </div>
             </CardHeader>
             <CardContent className="space-y-2">
-              <p className="text-sm text-muted-foreground">
-                New Strava activities are automatically synced to Garmin Connect.
-              </p>
-              <div className="text-xs text-muted-foreground space-y-1">
-                <p>✓ Activities from <strong>non-Garmin devices</strong> (cycling computers, phones) → Synced to Garmin</p>
-                <p>✓ Activities from <strong>Garmin devices</strong> → Skipped (already on Garmin)</p>
-              </div>
+              {user.liveSyncEnabled ? (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    New Strava activities are automatically synced to Garmin Connect.
+                  </p>
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <p>✓ Activities from <strong>non-Garmin devices</strong> (cycling computers, phones) → Synced to Garmin</p>
+                    <p>✓ Activities from <strong>Garmin devices</strong> → Skipped (already on Garmin)</p>
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Automatic syncing is disabled. You can still manually sync activities below.
+                </p>
+              )}
             </CardContent>
           </Card>
         )}

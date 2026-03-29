@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
         stravaAthleteId: true,
         garminEmail: true,
         garminConnected: true,
+        liveSyncEnabled: true,
         createdAt: true,
       },
     });
@@ -57,6 +58,7 @@ export async function GET(request: NextRequest) {
       stravaAthleteId: user.stravaAthleteId,
       garminConnected: user.garminConnected,
       garminEmail: user.garminEmail,
+      liveSyncEnabled: user.liveSyncEnabled,
       createdAt: user.createdAt,
     });
   } catch (error) {

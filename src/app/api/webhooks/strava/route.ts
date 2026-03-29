@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
     // Find user by Strava athlete ID
     const user = await prisma.user.findUnique({
       where: { stravaAthleteId: event.owner_id },
-      select: { id: true, garminConnected: true },
+      select: { id: true, garminConnected: true, liveSyncEnabled: true },
     });
 
     if (!user) {
@@ -108,6 +108,12 @@ export async function POST(request: NextRequest) {
     if (!user.garminConnected) {
       console.log(`User ${user.id} does not have Garmin connected`);
       return NextResponse.json({ received: true });
+    }
+
+    // Check if live sync is enabled
+    if (!user.liveSyncEnabled) {
+      console.log(`User ${user.id} has live sync disabled - skipping`);
+      return NextResponse.json({ received: true, skipped: 'live_sync_disabled' });
     }
 
     // Check if this activity was already processed
