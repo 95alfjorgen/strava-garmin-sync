@@ -378,6 +378,23 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Auto-Sync Status */}
+        {user?.garminConnected && (
+          <div className="card mb-8">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
+              <h2 className="font-semibold">Live Sync Active</h2>
+            </div>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+              New Strava activities are automatically synced to Garmin Connect.
+            </p>
+            <div className="text-xs text-slate-500 space-y-1">
+              <p>✓ Activities from <strong>non-Garmin devices</strong> (cycling computers, phones) → Synced to Garmin</p>
+              <p>✓ Activities from <strong>Garmin devices</strong> → Skipped (already on Garmin)</p>
+            </div>
+          </div>
+        )}
+
         {/* Stats */}
         {stats && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
