@@ -7,7 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
-  title: "Strava to Garmin Sync",
+  title: "OpenCadence",
   description: "Automatically sync your Strava activities to Garmin Connect",
 };
 

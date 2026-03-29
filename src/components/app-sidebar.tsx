@@ -40,12 +40,8 @@ export function AppSidebar() {
             <Zap className="h-4 w-4" />
           </div>
           <div className="flex flex-col">
-            <span className="text-sm font-semibold">
-              <span className="text-[#FC4C02]">Strava</span>
-              <span className="text-muted-foreground mx-1">→</span>
-              <span className="text-[#007CC3]">Garmin</span>
-            </span>
-            <span className="text-xs text-muted-foreground">Sync Service</span>
+            <span className="text-sm font-semibold">OpenCadence</span>
+            <span className="text-xs text-muted-foreground">Strava → Garmin Sync</span>
           </div>
         </div>
       </SidebarHeader>

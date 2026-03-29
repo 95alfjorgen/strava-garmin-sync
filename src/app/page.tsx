@@ -6,11 +6,7 @@ export default function Home() {
       {/* Header */}
       <header className="border-b border-slate-200 dark:border-slate-700">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-xl font-bold">
-            <span className="text-orange-500">Strava</span>
-            <span className="text-slate-400 mx-1">to</span>
-            <span className="text-blue-600">Garmin</span>
-          </h1>
+          <h1 className="text-xl font-bold">OpenCadence</h1>
           <Link href="/api/auth/strava" className="btn-primary">
             Connect with Strava
           </Link>
@@ -113,7 +109,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="border-t border-slate-200 dark:border-slate-700 py-8 px-4">
         <div className="max-w-6xl mx-auto text-center text-sm text-slate-500">
-          <p>Strava to Garmin Sync is not affiliated with Strava or Garmin.</p>
+          <p>OpenCadence is not affiliated with Strava or Garmin.</p>
         </div>
       </footer>
     </main>
