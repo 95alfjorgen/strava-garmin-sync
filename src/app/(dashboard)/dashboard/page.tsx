@@ -7,10 +7,6 @@ import { useSession } from "@/lib/auth-client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Textarea } from "@/components/ui/textarea";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Table,
   TableBody,
@@ -77,10 +73,6 @@ export default function Dashboard() {
   const [activities, setActivities] = useState<StravaActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [garminForm, setGarminForm] = useState({ email: "", password: "", tokenData: "" });
-  const [garminLoading, setGarminLoading] = useState(false);
-  const [garminError, setGarminError] = useState<string | null>(null);
-  const [useTokenMode, setUseTokenMode] = useState(false);
   const [syncingActivity, setSyncingActivity] = useState<number | null>(null);
 
   useEffect(() => {
@@ -131,38 +123,6 @@ export default function Dashboard() {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function connectGarmin(e: React.FormEvent) {
-    e.preventDefault();
-    setGarminLoading(true);
-    setGarminError(null);
-
-    try {
-      const endpoint = useTokenMode ? "/api/connect/garmin/token" : "/api/connect/garmin";
-      const payload = useTokenMode
-        ? { email: garminForm.email, password: garminForm.password, tokenData: garminForm.tokenData }
-        : { email: garminForm.email, password: garminForm.password };
-
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to connect Garmin");
-      }
-
-      setGarminForm({ email: "", password: "", tokenData: "" });
-      fetchData();
-    } catch (err) {
-      setGarminError(err instanceof Error ? err.message : "Connection failed");
-    } finally {
-      setGarminLoading(false);
     }
   }
 
@@ -387,54 +347,17 @@ export default function Dashboard() {
                 </Button>
               </>
             ) : (
-              <form onSubmit={connectGarmin} className="space-y-4">
-                {garminError && (
-                  <Alert variant="destructive">
-                    <AlertDescription>{garminError}</AlertDescription>
-                  </Alert>
-                )}
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="tokenMode"
-                    checked={useTokenMode}
-                    onCheckedChange={(checked) => setUseTokenMode(checked as boolean)}
-                  />
-                  <label htmlFor="tokenMode" className="text-sm cursor-pointer">
-                    Use token (bypass rate limit)
-                  </label>
-                </div>
-                <Input
-                  type="email"
-                  placeholder="Garmin email"
-                  value={garminForm.email}
-                  onChange={(e) => setGarminForm({ ...garminForm, email: e.target.value })}
-                  required
-                />
-                <Input
-                  type="password"
-                  placeholder="Garmin password"
-                  value={garminForm.password}
-                  onChange={(e) => setGarminForm({ ...garminForm, password: e.target.value })}
-                  required
-                />
-                {useTokenMode && (
-                  <Textarea
-                    placeholder="Paste token JSON from local script"
-                    value={garminForm.tokenData}
-                    onChange={(e) => setGarminForm({ ...garminForm, tokenData: e.target.value })}
-                    className="min-h-[80px] text-xs font-mono"
-                    required
-                  />
-                )}
-                <Button type="submit" className="w-full" disabled={garminLoading}>
-                  {garminLoading ? "Connecting..." : "Connect Garmin"}
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Connect your Garmin account to sync activities
+                </p>
+                <Button asChild className="w-full">
+                  <Link href="/connect-garmin">Connect Garmin</Link>
                 </Button>
                 <p className="text-xs text-muted-foreground">
-                  {useTokenMode
-                    ? "Run locally: node scripts/generate-garmin-token.js email password"
-                    : "Note: 2FA must be disabled. If rate limited, use token mode."}
+                  You&apos;ll log in directly to Garmin&apos;s website - we never see your password.
                 </p>
-              </form>
+              </div>
             )}
           </CardContent>
         </Card>

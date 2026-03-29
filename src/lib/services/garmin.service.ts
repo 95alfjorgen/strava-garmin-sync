@@ -155,9 +155,21 @@ export class GarminService {
     if (user.garminSessionData) {
       try {
         const sessionData = JSON.parse(user.garminSessionData);
-        console.log('Loading Garmin session from stored tokens...');
+        console.log('Loading Garmin session from stored tokens...', Object.keys(sessionData));
 
-        // Load the tokens directly into the client
+        // Handle tokens from bookmarklet (browser extraction)
+        if (sessionData.cookies || sessionData.GC_ORIGINAL_TOKEN) {
+          console.log('Detected browser-extracted tokens');
+          // Try to find OAuth tokens in localStorage data
+          if (sessionData.oauth1_token) {
+            client.client.oauth1Token = JSON.parse(sessionData.oauth1_token);
+          }
+          if (sessionData.oauth2_token) {
+            client.client.oauth2Token = JSON.parse(sessionData.oauth2_token);
+          }
+        }
+
+        // Handle tokens from garmin-connect library export
         if (sessionData.oauth1) {
           client.client.oauth1Token = sessionData.oauth1;
         }
