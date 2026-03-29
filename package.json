@@ -9,6 +9,8 @@
     "lint": "next lint",
     "worker": "tsx src/workers/sync-worker.ts",
     "worker:dev": "tsx watch src/workers/sync-worker.ts",
+    "worker:garmin": "tsx src/workers/garmin-connection-worker.ts",
+    "worker:garmin:dev": "tsx watch src/workers/garmin-connection-worker.ts",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",

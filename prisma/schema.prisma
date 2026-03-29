@@ -117,3 +117,26 @@ model WebhookSubscription {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 }
+
+enum GarminQueueStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model GarminConnectionQueue {
+  id              String             @id @default(cuid())
+  userId          String             @unique // One pending request per user
+  garminEmail     String
+  garminPasswordEnc String           // Encrypted password
+  status          GarminQueueStatus  @default(PENDING)
+  errorMessage    String?
+  retryCount      Int                @default(0)
+  nextRetryAt     DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([status])
+  @@index([nextRetryAt])
+}

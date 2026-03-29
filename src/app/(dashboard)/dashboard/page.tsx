@@ -64,6 +64,14 @@ interface StravaActivity {
   garminActivityId: string | null;
 }
 
+interface GarminQueueStatus {
+  connected: boolean;
+  queued: boolean;
+  status?: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+  position?: number | null;
+  errorMessage?: string | null;
+}
+
 export default function Dashboard() {
   const router = useRouter();
   const { data: session, isPending: sessionPending } = useSession();
@@ -74,6 +82,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [syncingActivity, setSyncingActivity] = useState<number | null>(null);
+  const [garminQueueStatus, setGarminQueueStatus] = useState<GarminQueueStatus | null>(null);
 
   useEffect(() => {
     if (!sessionPending && !session?.user) {
@@ -87,11 +96,12 @@ export default function Dashboard() {
 
   async function fetchData() {
     try {
-      const [userRes, statsRes, historyRes, activitiesRes] = await Promise.all([
+      const [userRes, statsRes, historyRes, activitiesRes, garminStatusRes] = await Promise.all([
         fetch("/api/user"),
         fetch("/api/sync/stats"),
         fetch("/api/sync/history?limit=10"),
         fetch("/api/strava/activities"),
+        fetch("/api/connect/garmin/status"),
       ]);
 
       if (!userRes.ok) {
@@ -118,6 +128,11 @@ export default function Dashboard() {
       if (activitiesRes.ok) {
         const activitiesData = await activitiesRes.json();
         setActivities(activitiesData.activities || []);
+      }
+
+      if (garminStatusRes.ok) {
+        const garminStatus = await garminStatusRes.json();
+        setGarminQueueStatus(garminStatus);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
@@ -327,6 +342,10 @@ export default function Dashboard() {
                   </svg>
                   Connected
                 </Badge>
+              ) : garminQueueStatus?.queued && (garminQueueStatus.status === "PENDING" || garminQueueStatus.status === "PROCESSING") ? (
+                <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-900 dark:text-blue-300">
+                  Connecting...
+                </Badge>
               ) : (
                 <Badge variant="secondary">Not Connected</Badge>
               )}
@@ -346,6 +365,21 @@ export default function Dashboard() {
                   Disconnect Account
                 </Button>
               </>
+            ) : garminQueueStatus?.queued && (garminQueueStatus.status === "PENDING" || garminQueueStatus.status === "PROCESSING") ? (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">Connection in progress...</p>
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
+                  <span>
+                    {garminQueueStatus.status === "PROCESSING"
+                      ? "Connecting to Garmin..."
+                      : `Queued (position ${garminQueueStatus.position || 1})`}
+                  </span>
+                </div>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href="/connect-garmin">View Status</Link>
+                </Button>
+              </div>
             ) : (
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
@@ -355,7 +389,7 @@ export default function Dashboard() {
                   <Link href="/connect-garmin">Connect Garmin</Link>
                 </Button>
                 <p className="text-xs text-muted-foreground">
-                  You&apos;ll log in directly to Garmin&apos;s website - we never see your password.
+                  Your credentials are encrypted and only used to upload activities.
                 </p>
               </div>
             )}
