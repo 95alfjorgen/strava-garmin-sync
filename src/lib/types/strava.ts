@@ -42,6 +42,9 @@ export interface StravaActivity {
     polyline: string;
     summary_polyline: string;
   };
+  // Device info for filtering
+  device_name?: string;
+  external_id?: string;
 }
 
 export interface StravaActivityStream {

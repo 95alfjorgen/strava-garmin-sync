@@ -1,9 +1,43 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { addSyncJob } from '@/lib/queue';
+import { stravaService } from '@/lib/services/strava.service';
+import { syncService } from '@/lib/services/sync.service';
 import type { StravaWebhookEvent } from '@/lib/types/strava';
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * Check if an activity was recorded on a Garmin device
+ * These activities are already on Garmin Connect, so we skip syncing them
+ */
+function isFromGarminDevice(deviceName?: string, externalId?: string): boolean {
+  const device = deviceName?.toLowerCase() || '';
+  const extId = externalId?.toLowerCase() || '';
+
+  // Check device name for Garmin
+  if (device.includes('garmin')) {
+    return true;
+  }
+
+  // Check external_id - Garmin activities often have garmin in the external_id
+  if (extId.includes('garmin')) {
+    return true;
+  }
+
+  // Common Garmin device names (without "Garmin" in name)
+  const garminDevices = [
+    'edge', 'forerunner', 'fenix', 'venu', 'vivoactive', 'instinct',
+    'enduro', 'epix', 'marq', 'descent', 'tactix', 'quatix', 'approach'
+  ];
+
+  for (const garminDevice of garminDevices) {
+    if (device.includes(garminDevice)) {
+      return true;
+    }
+  }
+
+  return false;
+}
 
 /**
  * Webhook validation endpoint (GET)
@@ -86,25 +120,45 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true });
     }
 
+    // Fetch activity details to check device info
+    console.log(`Fetching activity ${event.object_id} to check device...`);
+    const accessToken = await stravaService.getValidAccessToken(user.id);
+    const activity = await stravaService.getActivity(accessToken, event.object_id);
+
+    console.log(`Activity device info: device_name="${activity.device_name}", external_id="${activity.external_id}"`);
+
+    // Check if activity is from a Garmin device
+    if (isFromGarminDevice(activity.device_name, activity.external_id)) {
+      console.log(`Activity ${event.object_id} is from Garmin device - skipping sync (already on Garmin)`);
+      return NextResponse.json({ received: true, skipped: 'garmin_device' });
+    }
+
+    console.log(`Activity ${event.object_id} is NOT from Garmin - will sync to Garmin Connect`);
+
     // Create sync record
     const syncRecord = await prisma.syncRecord.create({
       data: {
         userId: user.id,
         stravaActivityId: BigInt(event.object_id),
         status: 'PENDING',
+        activityType: activity.sport_type || activity.type,
+        activityName: activity.name,
       },
     });
 
-    // Queue sync job
-    await addSyncJob({
-      syncRecordId: syncRecord.id,
-      userId: user.id,
-      stravaActivityId: event.object_id,
-    });
+    // Process sync directly (no Redis queue needed)
+    // Run in background so webhook returns quickly
+    syncService.triggerManualSync(user.id, event.object_id)
+      .then(() => {
+        console.log(`Sync completed for activity ${event.object_id}`);
+      })
+      .catch((error) => {
+        console.error(`Sync failed for activity ${event.object_id}:`, error);
+      });
 
-    console.log(`Queued sync job for activity ${event.object_id}`);
+    console.log(`Started sync for activity ${event.object_id}`);
 
-    return NextResponse.json({ received: true });
+    return NextResponse.json({ received: true, syncing: true });
   } catch (error) {
     console.error('Error processing webhook:', error);
     // Still return 200 to prevent Strava from retrying
