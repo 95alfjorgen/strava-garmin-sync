@@ -1,5 +1,8 @@
 import { prisma } from '@/lib/db';
 import { encrypt, decrypt } from '@/lib/encryption';
+import { writeFileSync, unlinkSync, mkdirSync, existsSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type GarminConnectInstance = any;
@@ -212,20 +215,44 @@ export class GarminService {
     fitFile: Buffer,
     fileName: string
   ): Promise<{ success: boolean; activityId?: string; error?: string }> {
+    // Write buffer to temp file (garmin-connect expects a file path)
+    const tempDir = join(tmpdir(), 'strava-garmin-sync');
+    if (!existsSync(tempDir)) {
+      mkdirSync(tempDir, { recursive: true });
+    }
+    const tempPath = join(tempDir, fileName);
+
     try {
+      writeFileSync(tempPath, fitFile);
+      console.log(`Wrote temp FIT file: ${tempPath} (${fitFile.length} bytes)`);
+
       const client = await this.getClient(userId);
 
-      // Upload the activity
-      const result = await client.uploadActivity(fitFile, fileName);
+      // Upload the activity (pass file path, not buffer)
+      const result = await client.uploadActivity(tempPath);
 
       // Extract activity ID from result
       const activityId = result?.detailedImportResult?.successes?.[0]?.internalId?.toString();
+
+      // Clean up temp file
+      try {
+        unlinkSync(tempPath);
+      } catch {
+        // Ignore cleanup errors
+      }
 
       return {
         success: true,
         activityId,
       };
     } catch (error) {
+      // Clean up temp file on error too
+      try {
+        unlinkSync(tempPath);
+      } catch {
+        // Ignore cleanup errors
+      }
+
       const message =
         error instanceof Error ? error.message : 'Upload failed';
 
