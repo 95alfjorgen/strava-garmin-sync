@@ -23,6 +23,8 @@ import {
 interface User {
   id: string;
   stravaAthleteId: number;
+  stravaName: string;
+  stravaProfilePicture: string | null;
   garminConnected: boolean;
   garminEmail: string | null;
   liveSyncEnabled: boolean;
@@ -355,16 +357,16 @@ export default function Dashboard() {
                 </Badge>
               </div>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-1">
+              <p className="text-sm text-muted-foreground">Logged in as</p>
               <p className="text-2xl font-semibold">
-                Athlete {user?.stravaAthleteId}
+                {user?.stravaName}
               </p>
-              <p className="text-sm text-muted-foreground">
-                Syncing activities from Strava
-              </p>
-              <Button variant="outline" size="sm" onClick={disconnectStrava}>
-                Disconnect Account
-              </Button>
+              <div className="pt-3">
+                <Button variant="outline" size="sm" onClick={disconnectStrava}>
+                  Disconnect Account
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
@@ -393,18 +395,18 @@ export default function Dashboard() {
                 )}
               </div>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-1">
               {user?.garminConnected ? (
                 <>
+                  <p className="text-sm text-muted-foreground">Logged in as</p>
                   <p className="text-2xl font-semibold">
                     {user.garminEmail}
                   </p>
-                  <p className="text-sm text-muted-foreground">
-                    Activities will sync to this account
-                  </p>
-                  <Button variant="outline" size="sm" onClick={disconnectGarmin}>
-                    Disconnect Account
-                  </Button>
+                  <div className="pt-3">
+                    <Button variant="outline" size="sm" onClick={disconnectGarmin}>
+                      Disconnect Account
+                    </Button>
+                  </div>
                 </>
               ) : (
                 <form onSubmit={connectGarmin} className="space-y-4">

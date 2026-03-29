@@ -18,6 +18,9 @@ enum SyncStatus {
 model User {
   id                   String   @id @default(cuid())
   stravaAthleteId      Int      @unique
+  stravaFirstName      String?
+  stravaLastName       String?
+  stravaProfilePicture String?
 
   // Strava OAuth tokens
   stravaAccessToken    String

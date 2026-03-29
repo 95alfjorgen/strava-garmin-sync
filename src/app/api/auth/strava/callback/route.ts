@@ -56,15 +56,22 @@ export async function GET(request: NextRequest) {
     // Create or update user in database
     let user;
     try {
+      const athlete = tokenResponse.athlete;
       user = await prisma.user.upsert({
-        where: { stravaAthleteId: tokenResponse.athlete.id },
+        where: { stravaAthleteId: athlete.id },
         create: {
-          stravaAthleteId: tokenResponse.athlete.id,
+          stravaAthleteId: athlete.id,
+          stravaFirstName: athlete.firstname,
+          stravaLastName: athlete.lastname,
+          stravaProfilePicture: athlete.profile,
           stravaAccessToken: tokenResponse.access_token,
           stravaRefreshToken: tokenResponse.refresh_token,
           stravaTokenExpiresAt: new Date(tokenResponse.expires_at * 1000),
         },
         update: {
+          stravaFirstName: athlete.firstname,
+          stravaLastName: athlete.lastname,
+          stravaProfilePicture: athlete.profile,
           stravaAccessToken: tokenResponse.access_token,
           stravaRefreshToken: tokenResponse.refresh_token,
           stravaTokenExpiresAt: new Date(tokenResponse.expires_at * 1000),

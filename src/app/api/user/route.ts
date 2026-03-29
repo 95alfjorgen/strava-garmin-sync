@@ -42,6 +42,9 @@ export async function GET(request: NextRequest) {
       select: {
         id: true,
         stravaAthleteId: true,
+        stravaFirstName: true,
+        stravaLastName: true,
+        stravaProfilePicture: true,
         garminEmail: true,
         garminConnected: true,
         liveSyncEnabled: true,
@@ -56,6 +59,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       id: user.id,
       stravaAthleteId: user.stravaAthleteId,
+      stravaName: user.stravaFirstName && user.stravaLastName
+        ? `${user.stravaFirstName} ${user.stravaLastName}`
+        : user.stravaFirstName || `Athlete ${user.stravaAthleteId}`,
+      stravaProfilePicture: user.stravaProfilePicture,
       garminConnected: user.garminConnected,
       garminEmail: user.garminEmail,
       liveSyncEnabled: user.liveSyncEnabled,
