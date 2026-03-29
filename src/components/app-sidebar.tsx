@@ -34,15 +34,12 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      <SidebarHeader className="border-b border-sidebar-border">
-        <div className="flex items-center gap-2 px-2 py-2">
+      <SidebarHeader className="h-14 border-b border-sidebar-border flex items-center">
+        <div className="flex items-center gap-2 px-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <Zap className="h-4 w-4" />
           </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-semibold">OpenCadence</span>
-            <span className="text-xs text-muted-foreground">Strava → Garmin Sync</span>
-          </div>
+          <span className="text-sm font-semibold">OpenCadence</span>
         </div>
       </SidebarHeader>
       <SidebarContent>
