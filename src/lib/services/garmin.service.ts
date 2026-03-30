@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db';
-import { encrypt } from '@/lib/encryption';
+import { encrypt, decrypt } from '@/lib/encryption';
 import { writeFileSync, unlinkSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -142,37 +142,69 @@ export class GarminService {
       throw new Error('Garmin account not connected');
     }
 
-    // Token-only auth (no password needed if we have session data)
-    if (!user.garminSessionData) {
-      throw new Error('Garmin session expired. Please reconnect your account.');
-    }
-
     const GC = await getGarminConnectClass();
 
-    // Create client - credentials are optional for token-based auth
-    const client = new GC();
+    // Try to restore session from stored tokens first
+    if (user.garminSessionData) {
+      try {
+        const sessionData = JSON.parse(user.garminSessionData);
+        console.log('Loading Garmin session from stored tokens...');
 
-    // Restore session from stored tokens
-    try {
-      const sessionData = JSON.parse(user.garminSessionData);
-      console.log('Loading Garmin session from stored tokens...', Object.keys(sessionData));
+        const client = new GC();
 
-      // Handle tokens from garmin-connect library export
-      if (sessionData.oauth1) {
-        client.client.oauth1Token = sessionData.oauth1;
+        // Handle tokens from garmin-connect library export
+        if (sessionData.oauth1) {
+          client.client.oauth1Token = sessionData.oauth1;
+        }
+        if (sessionData.oauth2) {
+          client.client.oauth2Token = sessionData.oauth2;
+        }
+
+        // Cache and return
+        this.clientCache.set(userId, client);
+        console.log('Garmin session restored from tokens');
+        return client;
+      } catch (err) {
+        console.error('Failed to restore Garmin session:', err);
+        // Fall through to password-based login
       }
-      if (sessionData.oauth2) {
-        client.client.oauth2Token = sessionData.oauth2;
-      }
-
-      // Cache and return - don't verify to avoid unnecessary API calls
-      this.clientCache.set(userId, client);
-      console.log('Garmin session restored from tokens');
-      return client;
-    } catch (err) {
-      console.error('Failed to restore Garmin session:', err);
-      throw new Error('Garmin session invalid. Please reconnect your account.');
     }
+
+    // Fall back to password-based login if we have credentials
+    if (user.garminEmail && user.garminPasswordEnc) {
+      console.log('Attempting password-based Garmin login...');
+      try {
+        const password = decrypt(user.garminPasswordEnc);
+        const client = new GC({
+          username: user.garminEmail,
+          password: password,
+        });
+
+        await client.login();
+
+        // Update session tokens for next time
+        try {
+          const exportedSession = await client.exportToken();
+          if (exportedSession) {
+            await prisma.user.update({
+              where: { id: userId },
+              data: { garminSessionData: JSON.stringify(exportedSession) },
+            });
+          }
+        } catch {
+          console.warn('Could not export new session tokens');
+        }
+
+        this.clientCache.set(userId, client);
+        return client;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        console.error('Password-based login failed:', message);
+        throw new Error(`Garmin login failed: ${message}`);
+      }
+    }
+
+    throw new Error('Garmin session expired. Please reconnect your account.');
   }
 
   /**

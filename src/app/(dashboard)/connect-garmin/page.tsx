@@ -5,38 +5,20 @@ import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ArrowLeft, Loader2, CheckCircle, Copy, Check, Download } from "lucide-react";
+import { ArrowLeft, Loader2, CheckCircle, Clock } from "lucide-react";
 import Link from "next/link";
-
-const SCRIPT_CONTENT = `const{GarminConnect}=require('garmin-connect');
-const rl=require('readline').createInterface({input:process.stdin,output:process.stdout});
-console.log('\\n🔐 Garmin Token Generator for OpenCadence\\n');
-rl.question('Garmin Email: ',email=>{
-  rl.question('Garmin Password: ',async password=>{
-    try{
-      console.log('\\nConnecting to Garmin...');
-      const client=new GarminConnect({username:email,password});
-      await client.login();
-      const tokens=await client.exportToken();
-      console.log('\\n✅ Success! Copy this token:\\n');
-      console.log('════════════════════════════════════════');
-      console.log(Buffer.from(JSON.stringify(tokens)).toString('base64'));
-      console.log('════════════════════════════════════════\\n');
-    }catch(e){console.error('\\n❌ Error:',e.message)}
-    rl.close();
-  });
-});`;
 
 export default function ConnectGarminPage() {
   const router = useRouter();
   const { data: session, isPending } = useSession();
-  const [token, setToken] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [copiedStep, setCopiedStep] = useState<number | null>(null);
+  const [rateLimited, setRateLimited] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(true);
   const [alreadyConnected, setAlreadyConnected] = useState(false);
 
@@ -72,59 +54,34 @@ export default function ConnectGarminPage() {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setRateLimited(false);
 
     try {
-      const trimmedToken = token.trim();
-      if (!trimmedToken) {
-        throw new Error("Please paste your token");
-      }
-
-      // Validate token format
-      try {
-        const decoded = atob(trimmedToken);
-        const parsed = JSON.parse(decoded);
-        if (!parsed.oauth1 && !parsed.oauth2) {
-          throw new Error("Invalid token format");
-        }
-      } catch {
-        throw new Error("Invalid token. Make sure you copied the entire token from the script output.");
-      }
-
-      const res = await fetch("/api/connect/garmin/token", {
+      const res = await fetch("/api/connect/garmin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: trimmedToken }),
+        body: JSON.stringify({ email, password }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
+        // Check for rate limit error
+        if (data.rateLimited || data.error?.toLowerCase().includes("rate") || data.error?.includes("429")) {
+          setRateLimited(true);
+          return;
+        }
         throw new Error(data.error || "Failed to connect Garmin");
       }
 
       setSuccess(true);
-      setToken("");
+      setEmail("");
+      setPassword("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Connection failed");
     } finally {
       setLoading(false);
     }
-  }
-
-  function copyToClipboard(text: string, step: number) {
-    navigator.clipboard.writeText(text);
-    setCopiedStep(step);
-    setTimeout(() => setCopiedStep(null), 2000);
-  }
-
-  function downloadScript() {
-    const blob = new Blob([SCRIPT_CONTENT], { type: "text/javascript" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "garmin-token.js";
-    a.click();
-    URL.revokeObjectURL(url);
   }
 
   if (isPending || checkingStatus) {
@@ -156,8 +113,46 @@ export default function ConnectGarminPage() {
     );
   }
 
+  if (rateLimited) {
+    return (
+      <div className="max-w-md mx-auto space-y-6">
+        <div className="flex items-center gap-4">
+          <Link href="/dashboard">
+            <Button variant="ghost" size="icon">
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          </Link>
+          <h1 className="text-2xl font-bold">Connect Garmin</h1>
+        </div>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center space-y-4">
+              <Clock className="h-16 w-16 text-orange-500 mx-auto" />
+              <h2 className="text-xl font-semibold">Please Try Again Later</h2>
+              <p className="text-muted-foreground">
+                Garmin is temporarily limiting connection attempts. This is a Garmin security measure, not an issue with your credentials.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Please wait <strong>1-2 hours</strong> and try again.
+              </p>
+              <div className="flex gap-2 justify-center pt-2">
+                <Button onClick={() => setRateLimited(false)}>
+                  Try Again Now
+                </Button>
+                <Button variant="outline" asChild>
+                  <Link href="/dashboard">Go Back</Link>
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-md mx-auto space-y-6">
       <div className="flex items-center gap-4">
         <Link href="/dashboard">
           <Button variant="ghost" size="icon">
@@ -167,75 +162,11 @@ export default function ConnectGarminPage() {
         <h1 className="text-2xl font-bold">Connect Garmin</h1>
       </div>
 
-      {/* Step 1 */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-sm">1</span>
-            Create a folder and install the package
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="relative">
-            <pre className="bg-muted p-3 rounded-lg text-sm font-mono overflow-x-auto">
-              mkdir garmin-token && cd garmin-token && npm init -y && npm install garmin-connect
-            </pre>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute top-1 right-1 h-8 w-8"
-              onClick={() => copyToClipboard("mkdir garmin-token && cd garmin-token && npm init -y && npm install garmin-connect", 1)}
-            >
-              {copiedStep === 1 ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Step 2 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-sm">2</span>
-            Download and run the script
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <Button onClick={downloadScript} variant="outline" className="w-full">
-            <Download className="mr-2 h-4 w-4" />
-            Download garmin-token.js
-          </Button>
-          <p className="text-sm text-muted-foreground">
-            Save the file to your garmin-token folder, then run:
-          </p>
-          <div className="relative">
-            <pre className="bg-muted p-3 rounded-lg text-sm font-mono">
-              node garmin-token.js
-            </pre>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute top-1 right-1 h-8 w-8"
-              onClick={() => copyToClipboard("node garmin-token.js", 2)}
-            >
-              {copiedStep === 2 ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-            </Button>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Enter your Garmin credentials when prompted. The script runs locally on your computer.
-          </p>
-        </CardContent>
-      </Card>
-
-      {/* Step 3 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-sm">3</span>
-            Paste Your Token
-          </CardTitle>
+          <CardTitle>Enter Your Garmin Credentials</CardTitle>
           <CardDescription>
-            Copy the token from the script output and paste it here.
+            Connect your Garmin account to sync activities from Strava.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -246,15 +177,37 @@ export default function ConnectGarminPage() {
               </Alert>
             )}
 
-            <Textarea
-              placeholder="Paste your token here..."
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              className="min-h-[100px] font-mono text-sm"
-              disabled={loading}
-            />
+            <div className="space-y-2">
+              <label htmlFor="email" className="text-sm font-medium">
+                Garmin Email
+              </label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="your@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                disabled={loading}
+              />
+            </div>
 
-            <Button type="submit" className="w-full" disabled={loading || !token.trim()}>
+            <div className="space-y-2">
+              <label htmlFor="password" className="text-sm font-medium">
+                Garmin Password
+              </label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                disabled={loading}
+              />
+            </div>
+
+            <Button type="submit" className="w-full" disabled={loading}>
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -270,27 +223,12 @@ export default function ConnectGarminPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Why This Process?</CardTitle>
+          <CardTitle className="text-base">Important Notes</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>
-            Garmin aggressively rate-limits login attempts from servers. By running the script
-            on your computer, the login uses your IP address, avoiding these limits.
-          </p>
-          <p>
-            Your password is never sent to our servers - only the session token is used.
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Requirements</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>• Node.js installed (<a href="https://nodejs.org" target="_blank" rel="noopener noreferrer" className="underline">download here</a>)</p>
-          <p>• Two-factor authentication disabled on Garmin</p>
-          <p>• Your Garmin Connect credentials</p>
+          <p>• Two-factor authentication must be disabled on Garmin</p>
+          <p>• Your credentials are encrypted and stored securely</p>
+          <p>• If connection fails, please wait 1-2 hours and try again</p>
         </CardContent>
       </Card>
     </div>
