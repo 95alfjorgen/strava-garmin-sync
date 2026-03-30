@@ -9,6 +9,24 @@ type GarminConnectInstance = any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type GarminConnectClass = any;
 
+interface IOauth1Token {
+  oauth_token: string;
+  oauth_token_secret: string;
+}
+
+interface IOauth2Token {
+  scope: string;
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+  expires_at: number;
+}
+
+interface IGarminTokens {
+  oauth1: IOauth1Token;
+  oauth2: IOauth2Token;
+}
+
 // Dynamic import to handle module resolution correctly
 let GarminConnect: GarminConnectClass | null = null;
 
@@ -118,7 +136,20 @@ export class GarminService {
   }
 
   /**
+   * Check if OAuth2 token is expired or about to expire (within 5 minutes)
+   */
+  private isTokenExpired(oauth2: IOauth2Token): boolean {
+    if (!oauth2.expires_at) {
+      return false; // Can't determine, assume valid
+    }
+    const now = Date.now() / 1000; // Convert to seconds
+    const bufferSeconds = 300; // 5 minute buffer
+    return oauth2.expires_at < (now + bufferSeconds);
+  }
+
+  /**
    * Get an authenticated Garmin client for a user
+   * Prioritizes stored tokens over password-based login to avoid rate limits
    */
   async getClient(userId: string): Promise<GarminConnectInstance> {
     // Check cache first
@@ -144,26 +175,36 @@ export class GarminService {
 
     const GC = await getGarminConnectClass();
 
-    // Try to restore session from stored tokens first
+    // Try to restore session from stored tokens first (avoids rate limits)
     if (user.garminSessionData) {
       try {
-        const sessionData = JSON.parse(user.garminSessionData);
-        console.log('Loading Garmin session from stored tokens...');
+        const sessionData: IGarminTokens = JSON.parse(user.garminSessionData);
 
-        const client = new GC();
+        // Check if token is expired
+        if (sessionData.oauth2 && this.isTokenExpired(sessionData.oauth2)) {
+          console.log('Garmin token expired, will try to refresh via login...');
+          // Fall through to password-based login
+        } else if (sessionData.oauth1 && sessionData.oauth2) {
+          console.log('Loading Garmin session from stored tokens...');
 
-        // Handle tokens from garmin-connect library export
-        if (sessionData.oauth1) {
-          client.client.oauth1Token = sessionData.oauth1;
+          const client = new GC();
+
+          // Use loadToken method to properly restore session
+          client.loadToken(sessionData.oauth1, sessionData.oauth2);
+
+          // Validate the token works by making a simple request
+          try {
+            await client.getUserSettings();
+            console.log('Garmin session restored and validated from tokens');
+
+            // Cache and return
+            this.clientCache.set(userId, client);
+            return client;
+          } catch (validationError) {
+            console.warn('Token validation failed, will try password login:', validationError);
+            // Fall through to password-based login
+          }
         }
-        if (sessionData.oauth2) {
-          client.client.oauth2Token = sessionData.oauth2;
-        }
-
-        // Cache and return
-        this.clientCache.set(userId, client);
-        console.log('Garmin session restored from tokens');
-        return client;
       } catch (err) {
         console.error('Failed to restore Garmin session:', err);
         // Fall through to password-based login
@@ -181,15 +222,17 @@ export class GarminService {
         });
 
         await client.login();
+        console.log('Password-based Garmin login successful');
 
-        // Update session tokens for next time
+        // Export and store session tokens for next time (avoids future rate limits)
         try {
-          const exportedSession = await client.exportToken();
+          const exportedSession = client.exportToken();
           if (exportedSession) {
             await prisma.user.update({
               where: { id: userId },
               data: { garminSessionData: JSON.stringify(exportedSession) },
             });
+            console.log('Garmin tokens saved for future use (valid for ~1 year)');
           }
         } catch {
           console.warn('Could not export new session tokens');
@@ -200,6 +243,12 @@ export class GarminService {
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
         console.error('Password-based login failed:', message);
+
+        // Check if rate limited
+        if (message.includes('429') || message.includes('rate') || message.includes('Too Many')) {
+          throw new Error('Garmin rate limited. Please try again later or use token-based authentication.');
+        }
+
         throw new Error(`Garmin login failed: ${message}`);
       }
     }
@@ -241,6 +290,19 @@ export class GarminService {
         // Ignore cleanup errors
       }
 
+      // Update stored tokens after successful operation (keeps them fresh)
+      try {
+        const exportedSession = client.exportToken();
+        if (exportedSession) {
+          await prisma.user.update({
+            where: { id: userId },
+            data: { garminSessionData: JSON.stringify(exportedSession) },
+          });
+        }
+      } catch {
+        // Ignore token export errors
+      }
+
       return {
         success: true,
         activityId,
@@ -256,13 +318,39 @@ export class GarminService {
       const message =
         error instanceof Error ? error.message : 'Upload failed';
 
-      // Clear cache on auth errors
+      // Clear cache on auth errors to force re-authentication
       if (
         message.includes('authentication') ||
         message.includes('unauthorized') ||
-        message.includes('401')
+        message.includes('401') ||
+        message.includes('403')
       ) {
         this.clientCache.delete(userId);
+
+        // If we have stored credentials, try one more time with fresh login
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { garminPasswordEnc: true },
+        });
+
+        if (user?.garminPasswordEnc) {
+          console.log('Auth error during upload, retrying with fresh login...');
+          // Clear session data to force password login
+          await prisma.user.update({
+            where: { id: userId },
+            data: { garminSessionData: null },
+          });
+
+          // Retry the upload
+          try {
+            return await this.uploadActivity(userId, fitFile, fileName);
+          } catch (retryError) {
+            return {
+              success: false,
+              error: retryError instanceof Error ? retryError.message : 'Retry failed',
+            };
+          }
+        }
       }
 
       return {
