@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ArrowLeft, Loader2, CheckCircle, Clock, Terminal, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, Loader2, CheckCircle, Clock } from "lucide-react";
 import Link from "next/link";
 
 export default function ConnectGarminPage() {
@@ -15,14 +15,12 @@ export default function ConnectGarminPage() {
   const { data: session, isPending } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [token, setToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [rateLimited, setRateLimited] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(true);
   const [alreadyConnected, setAlreadyConnected] = useState(false);
-  const [showTokenMethod, setShowTokenMethod] = useState(false);
 
   useEffect(() => {
     if (!isPending && !session?.user) {
@@ -68,7 +66,6 @@ export default function ConnectGarminPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        // Check for rate limit error
         if (data.rateLimited || data.error?.toLowerCase().includes("rate") || data.error?.includes("429")) {
           setRateLimited(true);
           return;
@@ -81,33 +78,6 @@ export default function ConnectGarminPage() {
       setPassword("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Connection failed");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleTokenSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    try {
-      const res = await fetch("/api/connect/garmin/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to upload token");
-      }
-
-      setSuccess(true);
-      setToken("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Token upload failed");
     } finally {
       setLoading(false);
     }
@@ -174,56 +144,6 @@ export default function ConnectGarminPage() {
                 </Button>
               </div>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Terminal className="h-4 w-4" />
-              Alternative: Use Token
-            </CardTitle>
-            <CardDescription>
-              Bypass rate limits by generating a token on your computer
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="text-sm text-muted-foreground space-y-2">
-              <p>1. Install the tool (one-time):</p>
-              <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
-{`npm install -g garmin-connect`}
-              </pre>
-              <p className="pt-2">2. Generate your token:</p>
-              <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto whitespace-pre-wrap break-all">
-{`node -e "const{GarminConnect}=require('garmin-connect');(async()=>{const g=new GarminConnect({username:'YOUR_EMAIL',password:'YOUR_PASSWORD'});await g.login();console.log(Buffer.from(JSON.stringify(await g.exportToken())).toString('base64'))})()"`}
-              </pre>
-              <p className="text-xs pt-1">Replace YOUR_EMAIL and YOUR_PASSWORD with your Garmin credentials.</p>
-              <p>Then paste the token below:</p>
-            </div>
-            <form onSubmit={handleTokenSubmit} className="space-y-4">
-              {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-              <Input
-                placeholder="Paste your token here..."
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                required
-                disabled={loading}
-              />
-              <Button type="submit" className="w-full" disabled={loading || !token}>
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Uploading...
-                  </>
-                ) : (
-                  "Connect with Token"
-                )}
-              </Button>
-            </form>
           </CardContent>
         </Card>
       </div>
@@ -309,66 +229,6 @@ export default function ConnectGarminPage() {
           <p>• Your credentials are encrypted and stored securely</p>
           <p>• If connection fails, please wait 1-2 hours and try again</p>
         </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader
-          className="cursor-pointer"
-          onClick={() => setShowTokenMethod(!showTokenMethod)}
-        >
-          <CardTitle className="text-base flex items-center justify-between">
-            <span className="flex items-center gap-2">
-              <Terminal className="h-4 w-4" />
-              Advanced: Use Token
-            </span>
-            {showTokenMethod ? (
-              <ChevronUp className="h-4 w-4" />
-            ) : (
-              <ChevronDown className="h-4 w-4" />
-            )}
-          </CardTitle>
-        </CardHeader>
-        {showTokenMethod && (
-          <CardContent className="space-y-4">
-            <div className="text-sm text-muted-foreground space-y-2">
-              <p>Bypass rate limits by generating a token on your computer (requires Node.js):</p>
-              <p className="pt-1">1. Install the tool:</p>
-              <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
-{`npm install -g garmin-connect`}
-              </pre>
-              <p className="pt-2">2. Generate your token:</p>
-              <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto whitespace-pre-wrap break-all">
-{`node -e "const{GarminConnect}=require('garmin-connect');(async()=>{const g=new GarminConnect({username:'YOUR_EMAIL',password:'YOUR_PASSWORD'});await g.login();console.log(Buffer.from(JSON.stringify(await g.exportToken())).toString('base64'))})()"`}
-              </pre>
-              <p className="text-xs pt-1">Replace YOUR_EMAIL and YOUR_PASSWORD with your Garmin credentials.</p>
-              <p className="pt-2">3. Paste the token below:</p>
-            </div>
-            <form onSubmit={handleTokenSubmit} className="space-y-4">
-              {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-              <Input
-                placeholder="Paste your token here..."
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                required
-                disabled={loading}
-              />
-              <Button type="submit" className="w-full" disabled={loading || !token}>
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Uploading...
-                  </>
-                ) : (
-                  "Connect with Token"
-                )}
-              </Button>
-            </form>
-          </CardContent>
-        )}
       </Card>
     </div>
   );
