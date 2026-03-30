@@ -1,55 +1,83 @@
+#!/usr/bin/env node
 /**
- * Run this script locally to generate Garmin tokens.
- * Your home IP is less likely to be rate limited.
+ * Garmin Token Generator
  *
- * Usage: node scripts/generate-garmin-token.js your-email@example.com your-password
+ * Run this script locally to generate Garmin session tokens.
+ * This avoids rate limiting because it runs from your IP, not the server.
+ *
+ * Usage:
+ *   node generate-garmin-token.js
+ *
+ * Then paste the output into OpenCadence.
  */
 
-const { GarminConnect } = require('garmin-connect');
+const readline = require('readline');
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout
+});
+
+function question(prompt) {
+  return new Promise((resolve) => {
+    rl.question(prompt, resolve);
+  });
+}
 
 async function main() {
-  const email = process.argv[2];
-  const password = process.argv[3];
+  console.log('\n🔐 Garmin Token Generator for OpenCadence\n');
+  console.log('This will log in to Garmin and generate session tokens.');
+  console.log('Your credentials are only used locally and not stored.\n');
 
-  if (!email || !password) {
-    console.error('Usage: node scripts/generate-garmin-token.js <email> <password>');
-    process.exit(1);
-  }
+  const email = await question('Garmin Email: ');
+  const password = await question('Garmin Password: ');
 
-  console.log('Attempting Garmin login...');
-
-  const client = new GarminConnect({
-    username: email,
-    password: password,
-  });
+  console.log('\n⏳ Connecting to Garmin...\n');
 
   try {
+    // Dynamic import for ES module
+    const { GarminConnect } = await import('garmin-connect');
+
+    const client = new GarminConnect({
+      username: email,
+      password: password
+    });
+
     await client.login();
-    console.log('Login successful!');
+    console.log('✅ Login successful!\n');
 
-    // Get the tokens
-    const oauth1 = client.client.oauth1Token;
-    const oauth2 = client.client.oauth2Token;
+    // Export session tokens
+    const tokens = await client.exportToken();
 
-    const tokenData = {
-      oauth1,
-      oauth2,
-    };
+    if (!tokens) {
+      console.error('❌ Failed to export tokens. Please try again.');
+      process.exit(1);
+    }
 
-    console.log('\n=== TOKEN DATA ===');
-    console.log(JSON.stringify(tokenData));
-    console.log('==================\n');
+    const tokenJson = JSON.stringify(tokens);
+    const tokenBase64 = Buffer.from(tokenJson).toString('base64');
 
-    console.log('Copy the JSON above and use it in the app settings to bypass the rate limit.');
-
-    // Verify tokens work
-    const profile = await client.getUserProfile();
-    console.log('Verified - logged in as:', profile.displayName || profile.userName);
+    console.log('═'.repeat(60));
+    console.log('\n📋 Copy this entire token and paste it into OpenCadence:\n');
+    console.log('═'.repeat(60));
+    console.log(tokenBase64);
+    console.log('═'.repeat(60));
+    console.log('\n✅ Done! Paste the token above into the OpenCadence dashboard.\n');
 
   } catch (error) {
-    console.error('Login failed:', error.message);
+    console.error('\n❌ Error:', error.message);
+
+    if (error.message.includes('MFA') || error.message.includes('2FA')) {
+      console.error('\n⚠️  Two-factor authentication is enabled.');
+      console.error('Please disable 2FA in your Garmin account settings and try again.');
+    } else if (error.message.includes('credentials') || error.message.includes('password')) {
+      console.error('\n⚠️  Invalid email or password. Please check your credentials.');
+    }
+
     process.exit(1);
   }
+
+  rl.close();
 }
 
 main();

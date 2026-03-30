@@ -2,15 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { encrypt } from "@/lib/encryption";
 import { headers } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
 const tokenSchema = z.object({
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(1, "Password is required"),
-  tokenData: z.string().min(1, "Token data is required"),
+  token: z.string().min(1, "Token is required"),
 });
 
 // Upload Garmin tokens directly (bypasses login rate limits)
@@ -35,29 +32,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { email, password, tokenData } = validation.data;
+    const { token } = validation.data;
 
-    // Validate token data is valid JSON
+    // Decode base64 token
+    let tokenData: string;
+    let parsedToken: { oauth1?: unknown; oauth2?: unknown };
     try {
-      JSON.parse(tokenData);
-    } catch {
+      tokenData = Buffer.from(token, "base64").toString("utf-8");
+      parsedToken = JSON.parse(tokenData);
+
+      // Validate token structure
+      if (!parsedToken.oauth1 && !parsedToken.oauth2) {
+        throw new Error("Token missing oauth1 or oauth2 data");
+      }
+    } catch (err) {
+      console.error("Token decode error:", err);
       return NextResponse.json(
-        { error: "Invalid token data - must be valid JSON" },
+        { error: "Invalid token format. Make sure you copied the entire token." },
         { status: 400 }
-      );
-    }
-
-    // Encrypt password and store
-    let encryptedPassword;
-    try {
-      encryptedPassword = encrypt(password);
-    } catch (encryptErr) {
-      console.error("Encryption failed:", encryptErr);
-      return NextResponse.json(
-        {
-          error: `Encryption failed: ${encryptErr instanceof Error ? encryptErr.message : "unknown"}`,
-        },
-        { status: 500 }
       );
     }
 
@@ -66,8 +58,8 @@ export async function POST(request: NextRequest) {
       await prisma.user.update({
         where: { id: session.user.id },
         data: {
-          garminEmail: email,
-          garminPasswordEnc: encryptedPassword,
+          garminEmail: "Connected via token",
+          garminPasswordEnc: null, // No password stored with token auth
           garminSessionData: tokenData,
           garminConnected: true,
         },
@@ -80,6 +72,15 @@ export async function POST(request: NextRequest) {
         },
         { status: 500 }
       );
+    }
+
+    // Clear any pending queue entries for this user
+    try {
+      await prisma.garminConnectionQueue.deleteMany({
+        where: { userId: session.user.id },
+      });
+    } catch {
+      // Ignore queue cleanup errors
     }
 
     return NextResponse.json({ success: true });

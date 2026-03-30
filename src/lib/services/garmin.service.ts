@@ -138,84 +138,40 @@ export class GarminService {
       },
     });
 
-    if (!user || !user.garminConnected || !user.garminEmail || !user.garminPasswordEnc) {
+    if (!user || !user.garminConnected) {
       throw new Error('Garmin account not connected');
     }
 
-    const GC = await getGarminConnectClass();
-    const password = decrypt(user.garminPasswordEnc);
-
-    // Create client with credentials
-    const client = new GC({
-      username: user.garminEmail,
-      password: password,
-    });
-
-    // Try to restore session first - this is the primary auth method
-    if (user.garminSessionData) {
-      try {
-        const sessionData = JSON.parse(user.garminSessionData);
-        console.log('Loading Garmin session from stored tokens...', Object.keys(sessionData));
-
-        // Handle tokens from bookmarklet (browser extraction)
-        if (sessionData.cookies || sessionData.GC_ORIGINAL_TOKEN) {
-          console.log('Detected browser-extracted tokens');
-          // Try to find OAuth tokens in localStorage data
-          if (sessionData.oauth1_token) {
-            client.client.oauth1Token = JSON.parse(sessionData.oauth1_token);
-          }
-          if (sessionData.oauth2_token) {
-            client.client.oauth2Token = JSON.parse(sessionData.oauth2_token);
-          }
-        }
-
-        // Handle tokens from garmin-connect library export
-        if (sessionData.oauth1) {
-          client.client.oauth1Token = sessionData.oauth1;
-        }
-        if (sessionData.oauth2) {
-          client.client.oauth2Token = sessionData.oauth2;
-        }
-
-        // Cache and return - don't verify to avoid unnecessary API calls
-        this.clientCache.set(userId, client);
-        console.log('Garmin session restored from tokens');
-        return client;
-      } catch (err) {
-        console.error('Failed to restore Garmin session:', err);
-      }
+    // Token-only auth (no password needed if we have session data)
+    if (!user.garminSessionData) {
+      throw new Error('Garmin session expired. Please reconnect your account.');
     }
 
-    // Only try login if we have no session data
-    // This will likely fail with rate limit, so warn the user
-    console.log('No stored session, attempting fresh login (may be rate limited)...');
+    const GC = await getGarminConnectClass();
+
+    // Create client - credentials are optional for token-based auth
+    const client = new GC();
+
+    // Restore session from stored tokens
     try {
-      await client.login();
+      const sessionData = JSON.parse(user.garminSessionData);
+      console.log('Loading Garmin session from stored tokens...', Object.keys(sessionData));
 
-      // Try to save new session
-      try {
-        const exportedSession = await client.exportToken();
-        if (exportedSession) {
-          await prisma.user.update({
-            where: { id: userId },
-            data: {
-              garminSessionData: JSON.stringify(exportedSession),
-            },
-          });
-        }
-      } catch {
-        console.warn('Could not export new Garmin session');
+      // Handle tokens from garmin-connect library export
+      if (sessionData.oauth1) {
+        client.client.oauth1Token = sessionData.oauth1;
+      }
+      if (sessionData.oauth2) {
+        client.client.oauth2Token = sessionData.oauth2;
       }
 
-      // Cache the client
+      // Cache and return - don't verify to avoid unnecessary API calls
       this.clientCache.set(userId, client);
+      console.log('Garmin session restored from tokens');
       return client;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      if (message.includes('429') || message.includes('Rate')) {
-        throw new Error('Garmin rate limited. Please re-upload your tokens using the token mode on the dashboard.');
-      }
-      throw error;
+    } catch (err) {
+      console.error('Failed to restore Garmin session:', err);
+      throw new Error('Garmin session invalid. Please reconnect your account.');
     }
   }
 
