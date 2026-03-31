@@ -1,6 +1,5 @@
 import { chromium, Browser, BrowserContext, Cookie } from 'playwright';
 import { prisma } from '@/lib/db';
-import { encrypt, decrypt } from '@/lib/encryption';
 
 // Session data stored in the database
 export interface GarminSession {
@@ -265,34 +264,6 @@ export class GarminPlaywrightService {
         error: `Garmin login failed: ${message}`,
       };
     }
-  }
-
-  /**
-   * Authenticate with stored credentials (attempts automated login).
-   * Falls back to manual login if automated login fails.
-   */
-  async authenticateWithCredentials(
-    userId: string,
-    email: string,
-    password: string
-  ): Promise<{ success: boolean; error?: string; requiresManualLogin?: boolean }> {
-    // Store credentials for potential future use
-    const encryptedPassword = encrypt(password);
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        garminEmail: email,
-        garminPasswordEnc: encryptedPassword,
-      },
-    });
-
-    // Due to Cloudflare protection, automated login typically fails
-    // Return a special response indicating manual login is required
-    return {
-      success: false,
-      requiresManualLogin: true,
-      error: 'Garmin requires manual login due to security measures. Click "Login Manually" to open a browser window.',
-    };
   }
 
   /**
