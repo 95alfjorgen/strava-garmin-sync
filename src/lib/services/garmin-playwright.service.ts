@@ -22,7 +22,7 @@ interface BrowserPoolEntry {
 // Configuration
 const BROWSER_POOL_SIZE = 5;
 const BROWSER_IDLE_TIMEOUT = 30 * 60 * 1000; // 30 minutes
-const SESSION_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+const SESSION_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days (cookies refresh on each successful API call)
 
 // Garmin URLs
 const GARMIN_SIGNIN_URL = 'https://connect.garmin.com/signin';
