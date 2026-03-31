@@ -2,15 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { garminPlaywrightService } from "@/lib/services/garmin-playwright.service";
+import { garminService } from "@/lib/services/garmin.service";
 import { headers } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
 const connectSchema = z.object({
-  email: z.string().email("Invalid email address").optional(),
-  password: z.string().min(1, "Password is required").optional(),
   manualLogin: z.boolean().optional(),
 });
+
+/**
+ * Check if we're using Browserless.io (production) or local Playwright (development)
+ */
+function isBrowserlessEnabled(): boolean {
+  return !!process.env.BROWSERLESS_TOKEN;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -35,7 +41,16 @@ export async function POST(request: NextRequest) {
 
     const { manualLogin } = validation.data;
 
-    // Manual login flow - opens browser for user to login
+    // In production with Browserless, redirect to use the session API
+    if (isBrowserlessEnabled()) {
+      return NextResponse.json({
+        success: false,
+        useBrowserless: true,
+        message: "Use /api/connect/garmin/session for Browserless authentication",
+      }, { status: 400 });
+    }
+
+    // Local development: Manual login flow with local Playwright browser
     if (manualLogin) {
       const result = await garminPlaywrightService.authenticateWithManualLogin(
         session.user.id
@@ -48,7 +63,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
-    // For now, always require manual login due to Cloudflare
+    // Default: require manual login
     return NextResponse.json({
       success: false,
       requiresManualLogin: true,
@@ -77,7 +92,7 @@ export async function DELETE() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    await garminPlaywrightService.disconnectAccount(session.user.id);
+    await garminService.disconnectAccount(session.user.id);
 
     return NextResponse.json({ success: true });
   } catch (error) {

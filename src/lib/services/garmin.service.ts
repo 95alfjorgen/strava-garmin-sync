@@ -1,15 +1,14 @@
 import { prisma } from '@/lib/db';
 import { garminPlaywrightService, GarminSession } from './garmin-playwright.service';
+import { garminBrowserlessService } from './garmin-browserless.service';
 
 /**
  * GarminService - Main interface for Garmin Connect operations
  *
- * This service uses Playwright-based browser automation to bypass
- * Cloudflare TLS fingerprinting that blocks standard HTTP clients.
+ * This service uses browser automation to bypass Cloudflare TLS fingerprinting.
  *
- * Due to Garmin's bot detection, authentication requires manual login
- * in a browser window. The session cookies are then captured and used
- * for subsequent API calls.
+ * In production (with BROWSERLESS_TOKEN), it uses Browserless.io cloud browsers.
+ * In development, it uses local Playwright browsers.
  */
 export class GarminService {
   private static instance: GarminService;
@@ -22,17 +21,39 @@ export class GarminService {
   }
 
   /**
+   * Check if we should use Browserless.io (production) or local Playwright (development)
+   */
+  private useBrowserless(): boolean {
+    return !!process.env.BROWSERLESS_TOKEN;
+  }
+
+  /**
    * Connect a user's Garmin account using manual browser login
+   * Note: In production with Browserless, use the /api/connect/garmin/session endpoint instead
    */
   async connectAccount(userId: string): Promise<{ success: boolean; error?: string }> {
-    return garminPlaywrightService.authenticateWithManualLogin(userId);
+    // For local development, use the local Playwright browser
+    if (!this.useBrowserless()) {
+      return garminPlaywrightService.authenticateWithManualLogin(userId);
+    }
+
+    // For production, this method shouldn't be called directly
+    // The UI should use the session API instead
+    return {
+      success: false,
+      error: 'Use the session API for Browserless authentication',
+    };
   }
 
   /**
    * Disconnect a user's Garmin account
    */
   async disconnectAccount(userId: string): Promise<void> {
-    await garminPlaywrightService.disconnectAccount(userId);
+    if (this.useBrowserless()) {
+      await garminBrowserlessService.disconnectAccount(userId);
+    } else {
+      await garminPlaywrightService.disconnectAccount(userId);
+    }
   }
 
   /**
@@ -43,6 +64,9 @@ export class GarminService {
     fitFile: Buffer,
     fileName: string
   ): Promise<{ success: boolean; activityId?: string; error?: string }> {
+    if (this.useBrowserless()) {
+      return garminBrowserlessService.uploadActivity(userId, fitFile, fileName);
+    }
     return garminPlaywrightService.uploadActivity(userId, fitFile, fileName);
   }
 
@@ -50,6 +74,9 @@ export class GarminService {
    * Check if a user's Garmin connection is valid
    */
   async verifyConnection(userId: string): Promise<boolean> {
+    if (this.useBrowserless()) {
+      return garminBrowserlessService.validateSession(userId);
+    }
     return garminPlaywrightService.validateSession(userId);
   }
 

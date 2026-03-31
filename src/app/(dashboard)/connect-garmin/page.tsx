@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ArrowLeft, Loader2, CheckCircle, ExternalLink, Shield } from "lucide-react";
+import { ArrowLeft, Loader2, CheckCircle, ExternalLink, Shield, X } from "lucide-react";
 import Link from "next/link";
 
 export default function ConnectGarminPage() {
@@ -17,6 +17,11 @@ export default function ConnectGarminPage() {
   const [success, setSuccess] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(true);
   const [alreadyConnected, setAlreadyConnected] = useState(false);
+
+  // Browserless session state
+  const [loginSessionId, setLoginSessionId] = useState<string | null>(null);
+  const [liveUrl, setLiveUrl] = useState<string | null>(null);
+  const [showBrowser, setShowBrowser] = useState(false);
 
   useEffect(() => {
     if (!isPending && !session?.user) {
@@ -29,6 +34,40 @@ export default function ConnectGarminPage() {
       checkStatus();
     }
   }, [session]);
+
+  // Poll for login completion when browser is shown (Browserless mode)
+  const pollForCompletion = useCallback(async () => {
+    if (!loginSessionId) return;
+
+    try {
+      const res = await fetch(`/api/connect/garmin/session?sessionId=${loginSessionId}`);
+      if (!res.ok) return;
+
+      const data = await res.json();
+
+      if (data.status === 'success') {
+        setSuccess(true);
+        setShowBrowser(false);
+        setLiveUrl(null);
+        setLoginSessionId(null);
+      } else if (data.status === 'failed') {
+        setError(data.error || 'Login failed');
+        setShowBrowser(false);
+        setLiveUrl(null);
+        setLoginSessionId(null);
+      }
+      // If pending or not_found, keep polling
+    } catch (err) {
+      console.error("Poll error:", err);
+    }
+  }, [loginSessionId]);
+
+  useEffect(() => {
+    if (!showBrowser || !loginSessionId) return;
+
+    const interval = setInterval(pollForCompletion, 3000);
+    return () => clearInterval(interval);
+  }, [showBrowser, loginSessionId, pollForCompletion]);
 
   async function checkStatus() {
     try {
@@ -46,29 +85,68 @@ export default function ConnectGarminPage() {
     }
   }
 
-  async function handleManualLogin() {
+  // Try Browserless first, fall back to local if not available
+  async function handleStartLogin() {
     setLoading(true);
     setError(null);
 
     try {
-      const res = await fetch("/api/connect/garmin", {
+      // First, try the Browserless session API
+      const sessionRes = await fetch("/api/connect/garmin/session", {
+        method: "POST",
+      });
+
+      const sessionData = await sessionRes.json();
+
+      if (sessionRes.ok && sessionData.liveUrl) {
+        // Browserless mode - show embedded browser
+        setLoginSessionId(sessionData.sessionId);
+        setLiveUrl(sessionData.liveUrl);
+        setShowBrowser(true);
+        return;
+      }
+
+      // If Browserless not available or failed, try local mode
+      const localRes = await fetch("/api/connect/garmin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ manualLogin: true }),
       });
 
-      const data = await res.json();
+      const localData = await localRes.json();
 
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to connect Garmin");
+      if (localRes.ok) {
+        setSuccess(true);
+        return;
       }
 
-      setSuccess(true);
+      // Check if we need to use Browserless but it's not configured
+      if (localData.useBrowserless) {
+        throw new Error("Cloud browser service is not configured. Please contact support.");
+      }
+
+      throw new Error(localData.error || "Failed to start login session");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Connection failed");
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleCancelLogin() {
+    if (loginSessionId) {
+      try {
+        await fetch(`/api/connect/garmin/session?sessionId=${loginSessionId}`, {
+          method: "DELETE",
+        });
+      } catch {
+        // Ignore cancel errors
+      }
+    }
+
+    setShowBrowser(false);
+    setLiveUrl(null);
+    setLoginSessionId(null);
   }
 
   if (isPending || checkingStatus) {
@@ -100,6 +178,47 @@ export default function ConnectGarminPage() {
     );
   }
 
+  // Show embedded browser for login (Browserless mode)
+  if (showBrowser && liveUrl) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={handleCancelLogin}>
+              <X className="h-4 w-4" />
+            </Button>
+            <h1 className="text-xl font-bold">Login to Garmin Connect</h1>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Waiting for login...
+          </div>
+        </div>
+
+        <Alert>
+          <AlertDescription>
+            Login to your Garmin account in the browser below. This page will update automatically when you complete the login.
+          </AlertDescription>
+        </Alert>
+
+        <div className="border rounded-lg overflow-hidden bg-white" style={{ height: '70vh' }}>
+          <iframe
+            src={liveUrl}
+            className="w-full h-full"
+            title="Garmin Login"
+            sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
+          />
+        </div>
+
+        <div className="flex justify-center">
+          <Button variant="outline" onClick={handleCancelLogin}>
+            Cancel Login
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-md mx-auto space-y-6">
       <div className="flex items-center gap-4">
@@ -115,7 +234,7 @@ export default function ConnectGarminPage() {
         <CardHeader>
           <CardTitle>Login to Garmin Connect</CardTitle>
           <CardDescription>
-            A browser window will open for you to login securely to Garmin Connect.
+            A secure browser window will open for you to login to Garmin Connect.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -127,36 +246,27 @@ export default function ConnectGarminPage() {
 
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Due to Garmin&apos;s security measures, you&apos;ll need to login manually in a browser window.
-              This ensures your credentials are entered directly on Garmin&apos;s website.
+              Due to Garmin&apos;s security measures, you&apos;ll login through a secure browser session.
+              Your credentials are entered directly on Garmin&apos;s website.
             </p>
 
             <Button
-              onClick={handleManualLogin}
+              onClick={handleStartLogin}
               className="w-full"
               disabled={loading}
             >
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Waiting for login...
+                  Starting session...
                 </>
               ) : (
                 <>
                   <ExternalLink className="mr-2 h-4 w-4" />
-                  Open Garmin Login
+                  Connect Garmin Account
                 </>
               )}
             </Button>
-
-            {loading && (
-              <Alert>
-                <AlertDescription>
-                  A browser window should have opened. Please login to Garmin Connect.
-                  This page will update automatically when you complete the login.
-                </AlertDescription>
-              </Alert>
-            )}
           </div>
         </CardContent>
       </Card>
@@ -170,16 +280,16 @@ export default function ConnectGarminPage() {
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-muted-foreground">
           <ol className="list-decimal list-inside space-y-2">
-            <li>Click &quot;Open Garmin Login&quot; above</li>
-            <li>A browser window will open to Garmin&apos;s login page</li>
+            <li>Click &quot;Connect Garmin Account&quot; above</li>
+            <li>A secure browser session will open</li>
             <li>Enter your Garmin credentials directly on their site</li>
-            <li>Once logged in, the browser will close automatically</li>
+            <li>Once logged in, you&apos;ll be redirected back automatically</li>
             <li>Your session will be saved for future syncs</li>
           </ol>
           <div className="pt-2 border-t">
             <p className="font-medium text-foreground">Important Notes:</p>
             <ul className="list-disc list-inside space-y-1 pl-2 mt-1">
-              <li>Sessions typically last 24 hours</li>
+              <li>Sessions typically last several weeks</li>
               <li>You may need to re-login periodically</li>
               <li>Two-factor authentication is supported</li>
             </ul>
