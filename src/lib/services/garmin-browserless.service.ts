@@ -14,6 +14,7 @@ export interface GarminSession {
 // Active login session (in-memory, for tracking ongoing logins)
 interface ActiveLoginSession {
   sessionId: string;
+  visitorId: string;
   userId: string;
   browser: Browser;
   context: BrowserContext;
@@ -81,29 +82,38 @@ export class GarminBrowserlessService {
   }
 
   /**
+   * Generate a unique visitor ID for Browserless reconnect feature
+   */
+  private generateVisitorId(): string {
+    return `garmin-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+  }
+
+  /**
    * Start a new Garmin login session and return the LiveURL for the user to interact with
    */
   async startLoginSession(userId: string): Promise<{ sessionId: string; liveUrl: string } | { error: string }> {
     try {
       const token = this.getBrowserlessToken();
-
-      // Generate a unique session ID
+      const visitorId = this.generateVisitorId();
       const sessionId = `garmin-${userId}-${Date.now()}`;
 
-      // Connect to Browserless via CDP
-      // The LiveURL is provided via query parameter
-      const browserWSEndpoint = `wss://production-sfo.browserless.io?token=${token}&launch={"stealth":true}&live=true`;
+      // Use Browserless reconnect feature to get a persistent session with live view
+      // The trackingId allows us to reconnect and creates a live URL
+      const launchConfig = JSON.stringify({
+        stealth: true,
+        args: ['--disable-blink-features=AutomationControlled']
+      });
 
-      console.log('Connecting to Browserless...');
+      const browserWSEndpoint = `wss://production-sfo.browserless.io?token=${token}&trackingId=${visitorId}&timeout=300000&launch=${encodeURIComponent(launchConfig)}`;
+
+      console.log('Connecting to Browserless with trackingId:', visitorId);
       const browser = await chromium.connectOverCDP(browserWSEndpoint);
 
-      // Get the LiveURL from browser metadata
-      // The LiveURL is typically returned in the browser's response or via a separate endpoint
-      // For Browserless.io, we can construct it from the session
-      const contexts = browser.contexts();
-      const context = contexts[0] || await browser.newContext({
+      // Create context and page
+      const context = await browser.newContext({
         viewport: { width: 1280, height: 800 },
         locale: 'en-US',
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
       });
 
       const page = await context.newPage();
@@ -112,13 +122,16 @@ export class GarminBrowserlessService {
       console.log('Navigating to Garmin login page...');
       await page.goto(GARMIN_SIGNIN_URL, { waitUntil: 'networkidle', timeout: 60000 });
 
-      // The LiveURL for Browserless.io follows this pattern
-      // We need to get it from the CDP session info
-      const liveUrl = this.getLiveUrl(browser, token);
+      // Construct the live URL using the trackingId
+      // Browserless v2 provides live view at this endpoint
+      const liveUrl = `https://production-sfo.browserless.io/live?token=${token}&trackingId=${visitorId}`;
+
+      console.log('Live URL:', liveUrl);
 
       // Store the active session
       const activeSession: ActiveLoginSession = {
         sessionId,
+        visitorId,
         userId,
         browser,
         context,
@@ -138,19 +151,6 @@ export class GarminBrowserlessService {
       const message = error instanceof Error ? error.message : 'Unknown error';
       return { error: `Failed to start login session: ${message}` };
     }
-  }
-
-  /**
-   * Get the LiveURL from Browserless
-   *
-   * Note: Browserless.io v2 provides live URLs when connecting with ?live=true
-   * The live URL is automatically generated and can be viewed at the debugger endpoint
-   */
-  private getLiveUrl(_browser: Browser, token: string): string {
-    // Browserless.io provides a debugger/live view at this URL
-    // When we connect with ?live=true, the session is viewable here
-    // The actual session is managed by Browserless and the user can interact through this URL
-    return `https://chrome.browserless.io/debugger?token=${token}`;
   }
 
   /**
@@ -313,8 +313,13 @@ export class GarminBrowserlessService {
       const sessionData: GarminSession = JSON.parse(user.garminSessionData);
       const token = this.getBrowserlessToken();
 
+      const launchConfig = JSON.stringify({
+        stealth: true,
+        args: ['--disable-blink-features=AutomationControlled']
+      });
+
       const browser = await chromium.connectOverCDP(
-        `wss://production-sfo.browserless.io?token=${token}&launch={"stealth":true}`
+        `wss://production-sfo.browserless.io?token=${token}&timeout=60000&launch=${encodeURIComponent(launchConfig)}`
       );
 
       const context = await browser.newContext({
