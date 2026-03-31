@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
-import { garminService } from "@/lib/services/garmin.service";
+import { garminPlaywrightService } from "@/lib/services/garmin-playwright.service";
 import { headers } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
 const connectSchema = z.object({
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(1, "Password is required"),
+  email: z.string().email("Invalid email address").optional(),
+  password: z.string().min(1, "Password is required").optional(),
+  manualLogin: z.boolean().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -32,38 +33,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { email, password } = validation.data;
+    const { manualLogin } = validation.data;
 
-    // Try to connect
-    const result = await garminService.connectAccount(
-      session.user.id,
-      email,
-      password
-    );
+    // Manual login flow - opens browser for user to login
+    if (manualLogin) {
+      const result = await garminPlaywrightService.authenticateWithManualLogin(
+        session.user.id
+      );
 
-    if (!result.success) {
-      // Check for rate limit
-      if (result.error?.includes("429") || result.error?.toLowerCase().includes("rate")) {
-        return NextResponse.json(
-          { error: result.error, rateLimited: true },
-          { status: 429 }
-        );
+      if (!result.success) {
+        return NextResponse.json({ error: result.error }, { status: 400 });
       }
-      return NextResponse.json({ error: result.error }, { status: 400 });
+
+      return NextResponse.json({ success: true });
     }
 
-    return NextResponse.json({ success: true });
+    // For now, always require manual login due to Cloudflare
+    return NextResponse.json({
+      success: false,
+      requiresManualLogin: true,
+      error: "Garmin requires manual login due to security measures.",
+    }, { status: 400 });
+
   } catch (error) {
     console.error("Error connecting Garmin account:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
-
-    // Check for rate limit in exception
-    if (message.includes("429") || message.toLowerCase().includes("rate")) {
-      return NextResponse.json(
-        { error: "Garmin rate limited", rateLimited: true },
-        { status: 429 }
-      );
-    }
 
     return NextResponse.json(
       { error: `Connection failed: ${message}` },
@@ -83,7 +77,7 @@ export async function DELETE() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    await garminService.disconnectAccount(session.user.id);
+    await garminPlaywrightService.disconnectAccount(session.user.id);
 
     return NextResponse.json({ success: true });
   } catch (error) {

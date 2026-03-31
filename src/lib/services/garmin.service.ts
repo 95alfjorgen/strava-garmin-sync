@@ -6,6 +6,10 @@ import { garminPlaywrightService, GarminSession } from './garmin-playwright.serv
  *
  * This service uses Playwright-based browser automation to bypass
  * Cloudflare TLS fingerprinting that blocks standard HTTP clients.
+ *
+ * Due to Garmin's bot detection, authentication requires manual login
+ * in a browser window. The session cookies are then captured and used
+ * for subsequent API calls.
  */
 export class GarminService {
   private static instance: GarminService;
@@ -18,14 +22,10 @@ export class GarminService {
   }
 
   /**
-   * Connect a user's Garmin account using headless browser authentication
+   * Connect a user's Garmin account using manual browser login
    */
-  async connectAccount(
-    userId: string,
-    email: string,
-    password: string
-  ): Promise<{ success: boolean; error?: string }> {
-    return garminPlaywrightService.authenticateWithCredentials(userId, email, password);
+  async connectAccount(userId: string): Promise<{ success: boolean; error?: string }> {
+    return garminPlaywrightService.authenticateWithManualLogin(userId);
   }
 
   /**
@@ -58,7 +58,6 @@ export class GarminService {
    */
   async getSessionInfo(userId: string): Promise<{
     connected: boolean;
-    email?: string;
     displayName?: string;
     expiresAt?: Date;
     lastValidated?: Date;
@@ -67,7 +66,6 @@ export class GarminService {
       where: { id: userId },
       select: {
         garminConnected: true,
-        garminEmail: true,
         garminSessionData: true,
       },
     });
@@ -93,26 +91,10 @@ export class GarminService {
 
     return {
       connected: true,
-      email: user.garminEmail || undefined,
       displayName,
       expiresAt,
       lastValidated,
     };
-  }
-
-  /**
-   * Execute a Garmin API call through the browser context
-   */
-  async executeApiCall<T>(
-    userId: string,
-    endpoint: string,
-    options?: {
-      method?: string;
-      body?: unknown;
-      headers?: Record<string, string>;
-    }
-  ): Promise<T> {
-    return garminPlaywrightService.executeApiCall<T>(userId, endpoint, options);
   }
 }
 
