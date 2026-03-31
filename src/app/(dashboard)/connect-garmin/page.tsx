@@ -98,10 +98,10 @@ export default function ConnectGarminPage() {
 
       const sessionData = await sessionRes.json();
 
-      if (sessionRes.ok && sessionData.liveUrl) {
-        // Browserless mode - show embedded browser
+      if (sessionRes.ok && sessionData.embedUrl) {
+        // Cloud browser mode - show embedded browser (Hyperbeam is interactive!)
         setLoginSessionId(sessionData.sessionId);
-        setLiveUrl(sessionData.liveUrl);
+        setLiveUrl(sessionData.embedUrl);
         setShowBrowser(true);
         return;
       }
@@ -183,7 +183,7 @@ export default function ConnectGarminPage() {
     );
   }
 
-  // Show embedded browser for login (Browserless mode)
+  // Show embedded browser for login (Hyperbeam is interactive)
   if (showBrowser && liveUrl) {
     return (
       <div className="space-y-4">
@@ -202,7 +202,8 @@ export default function ConnectGarminPage() {
 
         <Alert>
           <AlertDescription>
-            Login to your Garmin account in the browser below. This page will update automatically when you complete the login.
+            Login to your Garmin account below. Click and type directly in the browser.
+            This page will update automatically when you complete the login.
           </AlertDescription>
         </Alert>
 
@@ -211,7 +212,7 @@ export default function ConnectGarminPage() {
             src={liveUrl}
             className="w-full h-full"
             title="Garmin Login"
-            sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
+            allow="clipboard-read; clipboard-write"
           />
         </div>
 

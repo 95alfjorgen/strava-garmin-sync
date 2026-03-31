@@ -1,13 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { garminBrowserlessService } from "@/lib/services/garmin-browserless.service";
 import { headers } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
+// Dynamically import the appropriate service based on environment
+async function getService() {
+  if (process.env.HYPERBEAM_API_KEY) {
+    const { garminHyperbeamService } = await import("@/lib/services/garmin-hyperbeam.service");
+    return garminHyperbeamService;
+  }
+  if (process.env.BROWSERLESS_TOKEN) {
+    const { garminBrowserlessService } = await import("@/lib/services/garmin-browserless.service");
+    return garminBrowserlessService;
+  }
+  return null;
+}
+
 /**
  * Start a new Garmin login session
- * Returns a LiveURL for the user to interact with
+ * Returns an embedUrl for the user to interact with
  */
 export async function POST() {
   try {
@@ -20,15 +32,27 @@ export async function POST() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const result = await garminBrowserlessService.startLoginSession(session.user.id);
+    const service = await getService();
+
+    if (!service) {
+      return NextResponse.json(
+        { error: "No cloud browser service configured (HYPERBEAM_API_KEY or BROWSERLESS_TOKEN required)" },
+        { status: 500 }
+      );
+    }
+
+    const result = await service.startLoginSession(session.user.id);
 
     if ('error' in result) {
       return NextResponse.json({ error: result.error }, { status: 500 });
     }
 
+    // Handle different property names from different services
+    const embedUrl = 'embedUrl' in result ? result.embedUrl : 'liveUrl' in result ? result.liveUrl : undefined;
+
     return NextResponse.json({
       sessionId: result.sessionId,
-      liveUrl: result.liveUrl,
+      embedUrl,
     });
   } catch (error) {
     console.error("Error starting Garmin login session:", error);
@@ -60,11 +84,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "sessionId is required" }, { status: 400 });
     }
 
-    const status = garminBrowserlessService.getSessionStatus(sessionId);
+    const service = await getService();
 
-    // If session is not found, check if user is now connected to Garmin
+    if (!service) {
+      return NextResponse.json({ status: 'not_found' });
+    }
+
+    const status = service.getSessionStatus(sessionId);
+
+    // If session is not found, check if user is now connected
     if (status.status === 'not_found') {
-      // The session might have completed - check DB
       const { prisma } = await import('@/lib/db');
       const user = await prisma.user.findUnique({
         where: { id: session.user.id },
@@ -106,7 +135,11 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "sessionId is required" }, { status: 400 });
     }
 
-    await garminBrowserlessService.cancelLoginSession(sessionId);
+    const service = await getService();
+
+    if (service) {
+      await service.cancelLoginSession(sessionId);
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
