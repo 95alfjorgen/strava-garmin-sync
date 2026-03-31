@@ -97,17 +97,10 @@ export class GarminBrowserlessService {
       const visitorId = this.generateVisitorId();
       const sessionId = `garmin-${userId}-${Date.now()}`;
 
-      // Use Browserless reconnect feature to get a persistent session with live view
-      // The trackingId allows us to reconnect and creates a live URL
-      const launchConfig = JSON.stringify({
-        stealth: true,
-        args: ['--disable-blink-features=AutomationControlled']
-      });
+      // Connect to Browserless with minimal parameters first
+      const browserWSEndpoint = `wss://production-sfo.browserless.io?token=${token}`;
 
-      // Timeout is in seconds for Browserless (max 60000 based on plan)
-      const browserWSEndpoint = `wss://production-sfo.browserless.io?token=${token}&trackingId=${visitorId}&timeout=300&launch=${encodeURIComponent(launchConfig)}`;
-
-      console.log('Connecting to Browserless with trackingId:', visitorId);
+      console.log('Connecting to Browserless...');
       const browser = await chromium.connectOverCDP(browserWSEndpoint);
 
       // Create context and page
@@ -123,9 +116,8 @@ export class GarminBrowserlessService {
       console.log('Navigating to Garmin login page...');
       await page.goto(GARMIN_SIGNIN_URL, { waitUntil: 'networkidle', timeout: 60000 });
 
-      // Construct the live URL using the trackingId
-      // Browserless v2 provides live view at this endpoint
-      const liveUrl = `https://production-sfo.browserless.io/live?token=${token}&trackingId=${visitorId}`;
+      // Browserless provides a debugger view
+      const liveUrl = `https://chrome.browserless.io/debugger?token=${token}`;
 
       console.log('Live URL:', liveUrl);
 
@@ -314,14 +306,8 @@ export class GarminBrowserlessService {
       const sessionData: GarminSession = JSON.parse(user.garminSessionData);
       const token = this.getBrowserlessToken();
 
-      const launchConfig = JSON.stringify({
-        stealth: true,
-        args: ['--disable-blink-features=AutomationControlled']
-      });
-
-      // Timeout is in seconds for Browserless
       const browser = await chromium.connectOverCDP(
-        `wss://production-sfo.browserless.io?token=${token}&timeout=60&launch=${encodeURIComponent(launchConfig)}`
+        `wss://production-sfo.browserless.io?token=${token}`
       );
 
       const context = await browser.newContext({
