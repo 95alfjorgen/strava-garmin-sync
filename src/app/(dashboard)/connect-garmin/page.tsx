@@ -106,7 +106,12 @@ export default function ConnectGarminPage() {
         return;
       }
 
-      // If Browserless not available or failed, try local mode
+      // If Browserless session API returned an error, show it
+      if (sessionData.error) {
+        throw new Error(sessionData.error);
+      }
+
+      // If Browserless not available, try local mode
       const localRes = await fetch("/api/connect/garmin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -120,9 +125,9 @@ export default function ConnectGarminPage() {
         return;
       }
 
-      // Check if we need to use Browserless but it's not configured
+      // Check if we need to use Browserless but it failed
       if (localData.useBrowserless) {
-        throw new Error("Cloud browser service is not configured. Please contact support.");
+        throw new Error("Browserless service failed. Check server logs for details.");
       }
 
       throw new Error(localData.error || "Failed to start login session");

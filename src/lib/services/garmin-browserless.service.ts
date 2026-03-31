@@ -104,7 +104,8 @@ export class GarminBrowserlessService {
         args: ['--disable-blink-features=AutomationControlled']
       });
 
-      const browserWSEndpoint = `wss://production-sfo.browserless.io?token=${token}&trackingId=${visitorId}&timeout=300000&launch=${encodeURIComponent(launchConfig)}`;
+      // Timeout is in seconds for Browserless (max 60000 based on plan)
+      const browserWSEndpoint = `wss://production-sfo.browserless.io?token=${token}&trackingId=${visitorId}&timeout=300&launch=${encodeURIComponent(launchConfig)}`;
 
       console.log('Connecting to Browserless with trackingId:', visitorId);
       const browser = await chromium.connectOverCDP(browserWSEndpoint);
@@ -318,8 +319,9 @@ export class GarminBrowserlessService {
         args: ['--disable-blink-features=AutomationControlled']
       });
 
+      // Timeout is in seconds for Browserless
       const browser = await chromium.connectOverCDP(
-        `wss://production-sfo.browserless.io?token=${token}&timeout=60000&launch=${encodeURIComponent(launchConfig)}`
+        `wss://production-sfo.browserless.io?token=${token}&timeout=60&launch=${encodeURIComponent(launchConfig)}`
       );
 
       const context = await browser.newContext({
