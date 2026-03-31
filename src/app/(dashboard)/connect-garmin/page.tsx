@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ArrowLeft, Loader2, CheckCircle, Clock } from "lucide-react";
+import { ArrowLeft, Loader2, CheckCircle, Clock, Shield } from "lucide-react";
 import Link from "next/link";
 
 export default function ConnectGarminPage() {
@@ -210,24 +210,43 @@ export default function ConnectGarminPage() {
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Connecting...
+                  Authenticating via secure browser...
                 </>
               ) : (
                 "Connect Garmin"
               )}
             </Button>
+
+            {loading && (
+              <p className="text-xs text-muted-foreground text-center">
+                This may take up to 30 seconds while we securely authenticate with Garmin.
+              </p>
+            )}
           </form>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Important Notes</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Shield className="h-4 w-4" />
+            How It Works
+          </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>• Two-factor authentication must be disabled on Garmin</p>
-          <p>• Your credentials are encrypted and stored securely</p>
-          <p>• If connection fails, please wait 1-2 hours and try again</p>
+        <CardContent className="space-y-3 text-sm text-muted-foreground">
+          <p>
+            We use a secure headless browser to authenticate with Garmin Connect,
+            which provides the most reliable connection method.
+          </p>
+          <div className="space-y-1">
+            <p className="font-medium text-foreground">Important Notes:</p>
+            <ul className="list-disc list-inside space-y-1 pl-2">
+              <li>Two-factor authentication must be disabled on Garmin</li>
+              <li>Your credentials are encrypted and stored securely</li>
+              <li>Sessions typically last 12 hours and auto-refresh</li>
+              <li>If a CAPTCHA or security challenge appears, you may need to log in to Garmin Connect manually first</li>
+            </ul>
+          </div>
         </CardContent>
       </Card>
     </div>
