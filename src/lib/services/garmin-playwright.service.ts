@@ -22,7 +22,7 @@ interface BrowserPoolEntry {
 // Configuration
 const BROWSER_POOL_SIZE = 5;
 const BROWSER_IDLE_TIMEOUT = 30 * 60 * 1000; // 30 minutes
-const SESSION_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days (cookies refresh on each successful API call)
+const SESSION_DURATION = 365 * 24 * 60 * 60 * 1000; // 1 year - actual expiry depends on Garmin's cookies
 
 // Garmin URLs
 const GARMIN_SIGNIN_URL = 'https://connect.garmin.com/signin';
@@ -311,11 +311,8 @@ export class GarminPlaywrightService {
     try {
       const sessionData: GarminSession = JSON.parse(user.garminSessionData);
 
-      // Check if session is expired
-      if (Date.now() > sessionData.expiresAt) {
-        console.log('Garmin session expired');
-        return null;
-      }
+      // Don't check our artificial expiration - let Garmin's actual cookies determine validity
+      // The session will fail at API call time if cookies are truly expired
 
       const { browser, release } = await this.getBrowser();
 
