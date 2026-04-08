@@ -1,7 +1,9 @@
+import { createRequire } from 'module';
 import type { StravaActivity, StravaActivityStreams } from '../types/strava';
 
-// Dynamic import to handle module without type definitions
-// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+// Use createRequire to import CommonJS module in ESM context
+const require = createRequire(import.meta.url);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const fitsdk: any = require('@garmin/fitsdk');
 const { Encoder, Profile } = fitsdk;
 
