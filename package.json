@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "tsx scripts/sync.ts",
+    "worker": "tsx scripts/sync.ts",
     "sync": "tsx scripts/sync.ts",
     "setup:strava": "node scripts/generate-strava-token.js",
     "setup:garmin": "node scripts/generate-garmin-token.js"
