@@ -3,12 +3,11 @@
  * Garmin Token Generator
  *
  * Run this script locally to generate Garmin session tokens.
- * This avoids rate limiting because it runs from your IP, not the server.
  *
  * Usage:
- *   node generate-garmin-token.js
+ *   node scripts/generate-garmin-token.js
  *
- * Then paste the output into OpenCadence.
+ * Then add the output token to your .env file.
  */
 
 const readline = require('readline');
@@ -25,7 +24,7 @@ function question(prompt) {
 }
 
 async function main() {
-  console.log('\n🔐 Garmin Token Generator for OpenCadence\n');
+  console.log('\n🔐 Garmin Token Generator\n');
   console.log('This will log in to Garmin and generate session tokens.');
   console.log('Your credentials are only used locally and not stored.\n');
 
@@ -58,11 +57,11 @@ async function main() {
     const tokenBase64 = Buffer.from(tokenJson).toString('base64');
 
     console.log('═'.repeat(60));
-    console.log('\n📋 Copy this entire token and paste it into OpenCadence:\n');
+    console.log('\n📋 Add this to your .env file:\n');
     console.log('═'.repeat(60));
-    console.log(tokenBase64);
+    console.log(`GARMIN_TOKEN=${tokenBase64}`);
     console.log('═'.repeat(60));
-    console.log('\n✅ Done! Paste the token above into the OpenCadence dashboard.\n');
+    console.log('\n✅ Done! Copy the line above into your .env file.\n');
 
   } catch (error) {
     console.error('\n❌ Error:', error.message);
